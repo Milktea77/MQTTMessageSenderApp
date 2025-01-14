@@ -25,6 +25,39 @@ namespace MQTTMessageSenderApp
         {
             setupControl();
             this.Text = title;
+
+            // 显示当前所在路径
+            // 创建 Label 和 ToolTip
+            Label pathLabel = new Label { Left = 20, AutoSize = true, Cursor = Cursors.Hand }; // 添加手型光标
+            ToolTip pathToolTip = new ToolTip();
+
+            // 设置 Label 的文本和 ToolTip 的文本
+            string currentPath = Directory.GetCurrentDirectory();
+            pathLabel.Text = $"Software Path: {currentPath}";
+            pathToolTip.SetToolTip(pathLabel, currentPath);
+
+            // 限制 Label 最大宽度并显示省略号
+            pathLabel.MaximumSize = new System.Drawing.Size(this.ClientSize.Width - 40, 0);
+            pathLabel.AutoEllipsis = true;
+
+            // 动态计算 Label 的 Top 位置
+            pathLabel.Top = this.ClientSize.Height - pathLabel.Height - 10;
+
+            // 添加点击事件处理程序
+            pathLabel.Click += (sender, e) =>
+            {
+                try
+                {
+                    Clipboard.SetText(currentPath);
+                    pathToolTip.Show("路径已复制到剪贴板", pathLabel, pathLabel.Width / 2, -pathLabel.Height, 1000); // 显示提示信息
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"复制路径失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            };
+
+            this.Controls.Add(pathLabel);
         }
 
         private void setupControl()

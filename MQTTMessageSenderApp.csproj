@@ -8,6 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>ICON.ico</ApplicationIcon>
     <Authors>$(AssemblyName), Ethan Liang</Authors>
+    <Version>$(VersionPrefix)0.2.1.0-rc</Version>
   </PropertyGroup>
 
   <ItemGroup>
