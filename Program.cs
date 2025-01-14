@@ -36,35 +36,45 @@ namespace MQTTMessageSenderApp
             var labelPort = new Label { Text = "Port:", Top = 70, Left = 20, Width = 100 };
             var labelKeepalive = new Label { Text = "Keepalive (sec):", Top = 120, Left = 20, Width = 120 };
             var labelTopic = new Label { Text = "Topic:", Top = 170, Left = 20, Width = 100 };
-            var labelFileHint = new Label { Text = "请确保软件同一目录下存在sim_message.txt文件", Top = 320, Left = 20, Width = 300 };
+            var labelInterval = new Label { Text = "Interval (ms):", Top = 220, Left = 20, Width = 120 };
+            var labelFileHint = new Label { Text = "请确保软件同一目录下存在sim_message.txt文件", Top = 370, Left = 20, Width = 300 };
 
             var textBoxBroker = new TextBox { Top = 20, Left = 150, Width = 200 };
             var textBoxPort = new TextBox { Top = 70, Left = 150, Width = 200, Text = "1883" };
             var textBoxKeepalive = new TextBox { Top = 120, Left = 150, Width = 200, Text = "60" };
             var textBoxTopic = new TextBox { Top = 170, Left = 150, Width = 200 };
+            var textBoxInterval = new TextBox { Top = 220, Left = 150, Width = 200, Text = "60000" }; // 默认值为 60 秒
 
-            var buttonSend = new Button { Text = "Send", Top = 250, Left = 150, Width = 100 };
-            buttonSend.Click += async (sender, e) => await ToggleSendAsync(buttonSend, textBoxBroker.Text, textBoxPort.Text, textBoxKeepalive.Text, textBoxTopic.Text);
+            var buttonSend = new Button { Text = "Send", Top = 300, Left = 150, Width = 100 };
+            buttonSend.Click += async (sender, e) =>
+                await ToggleSendAsync(buttonSend, textBoxBroker.Text, textBoxPort.Text, textBoxKeepalive.Text, textBoxTopic.Text, textBoxInterval.Text);
 
             this.Controls.Add(labelBroker);
             this.Controls.Add(labelPort);
             this.Controls.Add(labelKeepalive);
             this.Controls.Add(labelTopic);
+            this.Controls.Add(labelInterval);
             this.Controls.Add(labelFileHint);
             this.Controls.Add(textBoxBroker);
             this.Controls.Add(textBoxPort);
             this.Controls.Add(textBoxKeepalive);
             this.Controls.Add(textBoxTopic);
+            this.Controls.Add(textBoxInterval);
             this.Controls.Add(buttonSend);
         }
 
-        private async Task ToggleSendAsync(Button button, string broker, string portStr, string keepaliveStr, string topic)
+
+        private async Task ToggleSendAsync(Button button, string broker, string portStr, string keepaliveStr, string topic, string intervalStr)
         {
             if (mqttClient == null || !mqttClient.IsConnected)
             {
-                if (!int.TryParse(portStr, out int port) || !int.TryParse(keepaliveStr, out int keepalive) || string.IsNullOrWhiteSpace(broker) || string.IsNullOrWhiteSpace(topic))
+                if (!int.TryParse(portStr, out int port) ||
+                    !int.TryParse(keepaliveStr, out int keepalive) ||
+                    !int.TryParse(intervalStr, out int interval) ||
+                    string.IsNullOrWhiteSpace(broker) ||
+                    string.IsNullOrWhiteSpace(topic))
                 {
-                    MessageBox.Show("请填写所有输入字段。", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("请填写所有输入字段，并确保输入有效数字。", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
@@ -81,7 +91,7 @@ namespace MQTTMessageSenderApp
 
                     button.Text = "Stop";
                     cts = new CancellationTokenSource();
-                    _ = SendMessagesAsync(topic, cts.Token);
+                    _ = SendMessagesAsync(topic, interval, cts.Token);
                 }
                 catch (Exception ex)
                 {
@@ -95,6 +105,7 @@ namespace MQTTMessageSenderApp
                 button.Text = "Send";
             }
         }
+
 
         // 报错时重置按钮为Send
         //private void ResetButtonState(Button button)
@@ -110,7 +121,7 @@ namespace MQTTMessageSenderApp
         //    cts = null; // Clear the cancellation token source.
         //}
 
-        private async Task SendMessagesAsync(string topic, CancellationToken cancellationToken)
+        private async Task SendMessagesAsync(string topic, int interval, CancellationToken cancellationToken)
         {
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -123,19 +134,8 @@ namespace MQTTMessageSenderApp
                     }
 
                     var message = await File.ReadAllTextAsync(messageFile);
-                    JsonDocument jsonDoc;
-                    try
-                    {
-                        jsonDoc = JsonDocument.Parse(message); // Validate JSON
-                    }
-                    catch
-                    {
-                        MessageBox.Show("该文件的JSON格式无效：'sim_message.txt'", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        break;
-                    }
-
-                    // 动态修改 ts 字段
                     var jsonObj = JsonSerializer.Deserialize<Dictionary<string, object>>(message);
+
                     if (jsonObj.ContainsKey("ts"))
                     {
                         jsonObj["ts"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -145,7 +145,6 @@ namespace MQTTMessageSenderApp
                         jsonObj.Add("ts", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
                     }
 
-                    // 序列化为字符串
                     message = JsonSerializer.Serialize(jsonObj);
 
                     var mqttMessage = new MqttApplicationMessageBuilder()
@@ -161,7 +160,7 @@ namespace MQTTMessageSenderApp
                     }
 
                     Logger.Info($"Message sent to topic '{topic}' at {DateTime.Now}");
-                    await Task.Delay(60 * 1000, cancellationToken); // Wait for 60 seconds
+                    await Task.Delay(interval, cancellationToken); // 使用动态间隔
                 }
                 catch (Exception ex)
                 {
@@ -170,6 +169,7 @@ namespace MQTTMessageSenderApp
                 }
             }
         }
+
 
         [STAThread]
         public static void Main()
