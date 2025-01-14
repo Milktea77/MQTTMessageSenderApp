@@ -123,15 +123,30 @@ namespace MQTTMessageSenderApp
                     }
 
                     var message = await File.ReadAllTextAsync(messageFile);
+                    JsonDocument jsonDoc;
                     try
                     {
-                        JsonDocument.Parse(message); // Validate JSON
+                        jsonDoc = JsonDocument.Parse(message); // Validate JSON
                     }
                     catch
                     {
                         MessageBox.Show("该文件的JSON格式无效：'sim_message.txt'", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         break;
                     }
+
+                    // 动态修改 ts 字段
+                    var jsonObj = JsonSerializer.Deserialize<Dictionary<string, object>>(message);
+                    if (jsonObj.ContainsKey("ts"))
+                    {
+                        jsonObj["ts"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    }
+                    else
+                    {
+                        jsonObj.Add("ts", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                    }
+
+                    // 序列化为字符串
+                    message = JsonSerializer.Serialize(jsonObj);
 
                     var mqttMessage = new MqttApplicationMessageBuilder()
                         .WithTopic(topic)
@@ -145,7 +160,6 @@ namespace MQTTMessageSenderApp
                         break;
                     }
 
-                    //Console.WriteLine($"Message sent to topic '{topic}' at {DateTime.Now}");
                     Logger.Info($"Message sent to topic '{topic}' at {DateTime.Now}");
                     await Task.Delay(60 * 1000, cancellationToken); // Wait for 60 seconds
                 }
