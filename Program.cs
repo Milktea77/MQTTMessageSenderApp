@@ -96,10 +96,26 @@ namespace MQTTMessageSenderApp
             this.Controls.Add(buttonSend);
         }
 
+        // 异常后重置按钮
+        // 重置按钮状态的方法
+        private void ResetButtonState(Button button)
+        {
+            if (button.InvokeRequired)
+            {
+                button.Invoke((MethodInvoker)(() => ResetButtonState(button)));
+                return;
+            }
+
+            button.Text = "Send";
+            isSending = false; // 确保状态同步为未发送
+            cts = null;
+        }
+
+        private bool isSending = false;
 
         private async Task ToggleSendAsync(Button button, string broker, string portStr, string keepaliveStr, string topic, string intervalStr)
         {
-            if (mqttClient == null || !mqttClient.IsConnected)
+            if (!isSending) // 当前未发送，点击后启动发送任务
             {
                 if (!int.TryParse(portStr, out int port) ||
                     !int.TryParse(keepaliveStr, out int keepalive) ||
@@ -108,6 +124,7 @@ namespace MQTTMessageSenderApp
                     string.IsNullOrWhiteSpace(topic))
                 {
                     MessageBox.Show("请填写所有输入字段，并确保输入有效数字。", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    ResetButtonState(button);
                     return;
                 }
 
@@ -123,47 +140,47 @@ namespace MQTTMessageSenderApp
                     await mqttClient.ConnectAsync(mqttOptions, CancellationToken.None);
 
                     button.Text = "Stop";
+                    isSending = true; // 更新状态为正在发送
                     cts = new CancellationTokenSource();
                     _ = SendMessagesAsync(topic, interval, cts.Token);
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show($"连接失败： {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    ResetButtonState(button);
                 }
             }
-            else
+            else // 当前正在发送，点击后停止发送任务
             {
-                cts.Cancel();
-                await mqttClient.DisconnectAsync();
-                button.Text = "Send";
+                if (cts != null)
+                {
+                    cts.Cancel();
+                    cts.Dispose();
+                    cts = null;
+                }
+
+                if (mqttClient != null && mqttClient.IsConnected)
+                {
+                    await mqttClient.DisconnectAsync();
+                }
+
+                ResetButtonState(button);
+                isSending = false; // 更新状态为未发送
             }
         }
 
 
-        // 报错时重置按钮为Send
-        //private void ResetButtonState(Button button)
-        //{
-        //    // Ensure UI updates are done on the main thread.
-        //    if (button.InvokeRequired)
-        //    {
-        //        button.Invoke((MethodInvoker)(() => ResetButtonState(button)));
-        //        return;
-        //    }
-
-        //    button.Text = "Send";
-        //    cts = null; // Clear the cancellation token source.
-        //}
-
         private async Task SendMessagesAsync(string topic, int interval, CancellationToken cancellationToken)
         {
-            while (!cancellationToken.IsCancellationRequested)
+            try
             {
-                try
+                while (!cancellationToken.IsCancellationRequested)
                 {
                     if (!File.Exists(messageFile))
                     {
                         MessageBox.Show($"消息文件 '{messageFile}' 在同目录中不存在！", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        break;
+                        ResetButtonState(this.Controls.OfType<Button>().FirstOrDefault(b => b.Text == "Stop")); // 找到当前 "Stop" 按钮并重置
+                        return;
                     }
 
                     var message = await File.ReadAllTextAsync(messageFile);
@@ -189,19 +206,21 @@ namespace MQTTMessageSenderApp
                     if (result.ReasonCode != MqttClientPublishReasonCode.Success)
                     {
                         MessageBox.Show($"推送失败： {result.ReasonCode}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        break;
+                        ResetButtonState(this.Controls.OfType<Button>().FirstOrDefault(b => b.Text == "Stop"));
+                        return;
                     }
 
                     Logger.Info($"Message sent to topic '{topic}' at {DateTime.Now}");
-                    await Task.Delay(interval, cancellationToken); // 使用动态间隔
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"发送消息失败或被手动中止: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    break;
+                    await Task.Delay(interval, cancellationToken);
                 }
             }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"发送消息失败或被手动中止: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ResetButtonState(this.Controls.OfType<Button>().FirstOrDefault(b => b.Text == "Stop"));
+            }
         }
+
 
 
         [STAThread]
