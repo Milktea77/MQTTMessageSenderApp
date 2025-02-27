@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using MQTTnet;
 using NLog;
+using System.Drawing;
+using System.Linq;
 
 // 解决二义性的别名设定
 //using CustomForm = MQTTMessageSenderApp.MainForm;
@@ -18,38 +20,135 @@ namespace MQTTMessageSenderApp
         private MqttClientOptions mqttOptions;
         private CancellationTokenSource cts;
         private string messageFile = Path.Combine(Directory.GetCurrentDirectory(), "sim_message.txt");
+        private NotifyIcon trayIcon;
+        private ContextMenuStrip trayMenu;
 
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
         public MainForm(string title)
         {
+            InitializeComponent(); // 初始化窗体组件
             setupControl();
             this.Text = title;
+            InitializeTrayIcon(); // 初始化托盘图标
+        }
 
-            // 显示当前所在路径
-            // 创建 Label 和 ToolTip
-            Label pathLabel = new Label { Left = 20, AutoSize = true, Cursor = Cursors.Hand }; // 添加手型光标
-            ToolTip pathToolTip = new ToolTip();
+        private void InitializeTrayIcon()
+        {
+            trayIcon = new NotifyIcon();
+            trayIcon.Text = "MQTT Message Sender";
+            trayIcon.Icon = SystemIcons.Application; // 设置托盘图标
+            trayIcon.Visible = false; // 初始时隐藏
 
-            // 设置 Label 的文本和 ToolTip 的文本
+            trayMenu = new ContextMenuStrip();
+            trayMenu.Items.Add("显示", null, OnTrayMenuShowClick);
+            trayMenu.Items.Add("退出", null, OnTrayMenuExitClick);
+            trayIcon.ContextMenuStrip = trayMenu;
+
+            trayIcon.DoubleClick += OnTrayIconDoubleClick;
+            this.Resize += OnFormResize;
+        }
+
+        private void setupControl()
+        {
+            this.Text = "MQTT Message Sender";
+            this.ClientSize = new System.Drawing.Size(400, 600);
+            this.BackColor = Color.White; // 统一背景颜色
+
+            // 使用 TableLayoutPanel 实现整齐的布局
+            TableLayoutPanel layout = new TableLayoutPanel
+            {
+                ColumnCount = 2,
+                RowCount = 7,
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                Padding = new Padding(10),
+                BackColor = Color.White
+            };
+
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); // 第一列固定宽度
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); // 第二列占满剩余空间
+
+            // 创建控件
+            var labelBroker = new Label { Text = "Broker IP:", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill };
+            var labelPort = new Label { Text = "Port:", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill };
+            var labelKeepalive = new Label { Text = "Keepalive (sec):", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill };
+            var labelTopic = new Label { Text = "Topic:", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill };
+            var labelInterval = new Label { Text = "Interval (ms):", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill };
+
+            var textBoxBroker = new TextBox { Dock = DockStyle.Fill };
+            var textBoxPort = new TextBox { Dock = DockStyle.Fill, Text = "1883" };
+            var textBoxKeepalive = new TextBox { Dock = DockStyle.Fill, Text = "60" };
+            var textBoxTopic = new TextBox { Dock = DockStyle.Fill };
+            var textBoxInterval = new TextBox { Dock = DockStyle.Fill, Text = "60000" };
+
+            var buttonSend = new Button
+            {
+                Name = "buttonSend", // 确保在其他方法中可以找到这个按钮
+                Text = "Send",
+                Dock = DockStyle.Top,
+                Height = 40
+            };
+            buttonSend.Click += async (sender, e) =>
+                await ToggleSendAsync(buttonSend, textBoxBroker.Text, textBoxPort.Text, textBoxKeepalive.Text, textBoxTopic.Text, textBoxInterval.Text);
+
+            // 将控件添加到布局
+            layout.Controls.Add(labelBroker, 0, 0);
+            layout.Controls.Add(textBoxBroker, 1, 0);
+            layout.Controls.Add(labelPort, 0, 1);
+            layout.Controls.Add(textBoxPort, 1, 1);
+            layout.Controls.Add(labelKeepalive, 0, 2);
+            layout.Controls.Add(textBoxKeepalive, 1, 2);
+            layout.Controls.Add(labelTopic, 0, 3);
+            layout.Controls.Add(textBoxTopic, 1, 3);
+            layout.Controls.Add(labelInterval, 0, 4);
+            layout.Controls.Add(textBoxInterval, 1, 4);
+
+            // 添加文件提示信息
+            var labelFileHint = new Label
+            {
+                Text = "请确保软件同一目录下存在 sim_message.txt 文件",
+                AutoSize = true,
+                Dock = DockStyle.Top,
+                ForeColor = Color.DarkRed,
+                Padding = new Padding(10, 5, 10, 5)
+            };
+
+            // 添加最小化提示
+            var labelMinimizeHint = new Label
+            {
+                Text = "点击最小化，软件将被置于托盘",
+                AutoSize = true,
+                Dock = DockStyle.Top,
+                ForeColor = Color.Gray,
+                Padding = new Padding(10, 0, 10, 5)
+            };
+
+            // 添加路径标签
+            Label pathLabel = new Label
+            {
+                AutoSize = true,
+                Cursor = Cursors.Hand,
+                ForeColor = Color.Blue,
+                Dock = DockStyle.Bottom,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(10),
+                MaximumSize = new System.Drawing.Size(this.ClientSize.Width - 20, 0),
+                AutoEllipsis = true
+            };
+
             string currentPath = Directory.GetCurrentDirectory();
             pathLabel.Text = $"Software Path: {currentPath}";
+
+            ToolTip pathToolTip = new ToolTip();
             pathToolTip.SetToolTip(pathLabel, currentPath);
 
-            // 限制 Label 最大宽度并显示省略号
-            pathLabel.MaximumSize = new System.Drawing.Size(this.ClientSize.Width - 40, 0);
-            pathLabel.AutoEllipsis = true;
-
-            // 动态计算 Label 的 Top 位置
-            pathLabel.Top = this.ClientSize.Height - pathLabel.Height - 10;
-
-            // 添加点击事件处理程序
             pathLabel.Click += (sender, e) =>
             {
                 try
                 {
                     Clipboard.SetText(currentPath);
-                    pathToolTip.Show("路径已复制到剪贴板", pathLabel, pathLabel.Width / 2, -pathLabel.Height, 1000); // 显示提示信息
+                    pathToolTip.Show("路径已复制到剪贴板", pathLabel, pathLabel.Width / 2, -pathLabel.Height, 1000);
                 }
                 catch (Exception ex)
                 {
@@ -57,59 +156,52 @@ namespace MQTTMessageSenderApp
                 }
             };
 
+            // 监听窗口大小变化，确保 Path 标签自适应
+            this.Resize += (sender, e) =>
+            {
+                pathLabel.MaximumSize = new System.Drawing.Size(this.ClientSize.Width - 20, 0);
+            };
+
+            // 创建主布局 Panel
+            Panel mainPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(20)
+            };
+
+            mainPanel.Controls.Add(layout);
+            mainPanel.Controls.Add(buttonSend);
+            mainPanel.Controls.Add(labelFileHint);
+            mainPanel.Controls.Add(labelMinimizeHint);
+            mainPanel.Controls.Add(pathLabel);
+
+            // 确保路径始终在最底部
             this.Controls.Add(pathLabel);
+            this.Controls.Add(mainPanel);
         }
 
-        private void setupControl()
-        {
-            this.Text = "MQTT Message Sender";
-            this.ClientSize = new System.Drawing.Size(400, 500);
-
-            var labelBroker = new Label { Text = "Broker IP:", Top = 20, Left = 20, Width = 100 };
-            var labelPort = new Label { Text = "Port:", Top = 70, Left = 20, Width = 100 };
-            var labelKeepalive = new Label { Text = "Keepalive (sec):", Top = 120, Left = 20, Width = 120 };
-            var labelTopic = new Label { Text = "Topic:", Top = 170, Left = 20, Width = 100 };
-            var labelInterval = new Label { Text = "Interval (ms):", Top = 220, Left = 20, Width = 120 };
-            var labelFileHint = new Label { Text = "请确保软件同一目录下存在sim_message.txt文件", Top = 370, Left = 20, Width = 300 };
-
-            var textBoxBroker = new TextBox { Top = 20, Left = 150, Width = 200 };
-            var textBoxPort = new TextBox { Top = 70, Left = 150, Width = 200, Text = "1883" };
-            var textBoxKeepalive = new TextBox { Top = 120, Left = 150, Width = 200, Text = "60" };
-            var textBoxTopic = new TextBox { Top = 170, Left = 150, Width = 200 };
-            var textBoxInterval = new TextBox { Top = 220, Left = 150, Width = 200, Text = "60000" }; // 默认值为 60 秒
-
-            var buttonSend = new Button { Text = "Send", Top = 300, Left = 150, Width = 100 };
-            buttonSend.Click += async (sender, e) =>
-                await ToggleSendAsync(buttonSend, textBoxBroker.Text, textBoxPort.Text, textBoxKeepalive.Text, textBoxTopic.Text, textBoxInterval.Text);
-
-            this.Controls.Add(labelBroker);
-            this.Controls.Add(labelPort);
-            this.Controls.Add(labelKeepalive);
-            this.Controls.Add(labelTopic);
-            this.Controls.Add(labelInterval);
-            this.Controls.Add(labelFileHint);
-            this.Controls.Add(textBoxBroker);
-            this.Controls.Add(textBoxPort);
-            this.Controls.Add(textBoxKeepalive);
-            this.Controls.Add(textBoxTopic);
-            this.Controls.Add(textBoxInterval);
-            this.Controls.Add(buttonSend);
-        }
 
         // 异常后重置按钮
         // 重置按钮状态的方法
         private void ResetButtonState(Button button)
         {
-            if (button.InvokeRequired)
+            if (button?.IsDisposed == true) return; // 按钮已经被销毁，直接返回
+
+            if (button?.InvokeRequired == true)
             {
                 button.Invoke((MethodInvoker)(() => ResetButtonState(button)));
                 return;
             }
 
-            button.Text = "Send";
+            if (button != null)
+            {
+                button.Text = "Send";
+            }
+
             isSending = false; // 确保状态同步为未发送
             cts = null;
         }
+
 
         private bool isSending = false;
 
@@ -124,7 +216,10 @@ namespace MQTTMessageSenderApp
                     string.IsNullOrWhiteSpace(topic))
                 {
                     MessageBox.Show("请填写所有输入字段，并确保输入有效数字。", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    ResetButtonState(button);
+                    if (button != null)
+                    {
+                        ResetButtonState(button);
+                    }
                     return;
                 }
 
@@ -139,7 +234,11 @@ namespace MQTTMessageSenderApp
 
                     await mqttClient.ConnectAsync(mqttOptions, CancellationToken.None);
 
-                    button.Text = "Stop";
+                    if (button != null)
+                    {
+                        button.Text = "Stop";
+                    }
+
                     isSending = true; // 更新状态为正在发送
                     cts = new CancellationTokenSource();
                     _ = SendMessagesAsync(topic, interval, cts.Token);
@@ -147,7 +246,11 @@ namespace MQTTMessageSenderApp
                 catch (Exception ex)
                 {
                     MessageBox.Show($"连接失败： {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    ResetButtonState(button);
+
+                    if (button != null)
+                    {
+                        ResetButtonState(button);
+                    }
                 }
             }
             else // 当前正在发送，点击后停止发送任务
@@ -164,10 +267,14 @@ namespace MQTTMessageSenderApp
                     await mqttClient.DisconnectAsync();
                 }
 
-                ResetButtonState(button);
+                if (button != null)
+                {
+                    ResetButtonState(button);
+                }
                 isSending = false; // 更新状态为未发送
             }
         }
+
 
 
         private async Task SendMessagesAsync(string topic, int interval, CancellationToken cancellationToken)
@@ -179,7 +286,9 @@ namespace MQTTMessageSenderApp
                     if (!File.Exists(messageFile))
                     {
                         MessageBox.Show($"消息文件 '{messageFile}' 在同目录中不存在！", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        ResetButtonState(this.Controls.OfType<Button>().FirstOrDefault(b => b.Text == "Stop")); // 找到当前 "Stop" 按钮并重置
+
+                        var stopButton = this.Controls.OfType<Button>().FirstOrDefault(b => b.Name == "buttonSend");
+                        ResetButtonState(stopButton);
                         return;
                     }
 
@@ -206,7 +315,9 @@ namespace MQTTMessageSenderApp
                     if (result.ReasonCode != MqttClientPublishReasonCode.Success)
                     {
                         MessageBox.Show($"推送失败： {result.ReasonCode}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        ResetButtonState(this.Controls.OfType<Button>().FirstOrDefault(b => b.Text == "Stop"));
+
+                        var stopButton = this.Controls.OfType<Button>().FirstOrDefault(b => b.Name == "buttonSend");
+                        ResetButtonState(stopButton);
                         return;
                     }
 
@@ -217,10 +328,48 @@ namespace MQTTMessageSenderApp
             catch (Exception ex)
             {
                 MessageBox.Show($"发送消息失败或被手动中止: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                ResetButtonState(this.Controls.OfType<Button>().FirstOrDefault(b => b.Text == "Stop"));
+
+                var stopButton = this.Controls.OfType<Button>().FirstOrDefault(b => b.Name == "buttonSend");
+                ResetButtonState(stopButton);
             }
         }
 
+
+        private void OnTrayMenuShowClick(object sender, EventArgs e)
+        {
+            ShowFormFromTray();
+        }
+
+        private void OnTrayMenuExitClick(object sender, EventArgs e)
+        {
+            Application.Exit();
+        }
+
+        private void OnTrayIconDoubleClick(object sender, EventArgs e)
+        {
+            ShowFormFromTray();
+        }
+
+        private void OnFormResize(object sender, EventArgs e)
+        {
+            if (this.WindowState == FormWindowState.Minimized)
+            {
+                HideFormToTray();
+            }
+        }
+
+        private void HideFormToTray()
+        {
+            this.Hide();
+            trayIcon.Visible = true;
+        }
+
+        private void ShowFormFromTray()
+        {
+            this.Show();
+            this.WindowState = FormWindowState.Normal;
+            trayIcon.Visible = false;
+        }
 
 
         [STAThread]
