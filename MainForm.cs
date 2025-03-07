@@ -41,6 +41,24 @@ namespace MQTTMessageSenderApp
 
                 try
                 {
+                    // 先检查 `sim_message.txt` 是否为空
+                    if (MessageFileHandler.IsMessageFileEmpty())
+                    {
+                        DialogResult result = MessageBox.Show(
+                            "消息内容为空，是否继续发送？",
+                            "警告",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Warning
+                        );
+
+                        if (result == DialogResult.No)
+                        {
+                            ResetButtonState(button);
+                            return; // 用户选择“否”，取消发送
+                        }
+                    }
+
+                    string message = await MessageFileHandler.ReadMessageAsync(); // 读取消息
                     isSending = true;
                     button.Text = "Stop";
                     cts = new CancellationTokenSource();
@@ -48,11 +66,11 @@ namespace MQTTMessageSenderApp
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"连接失败： {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show($"发送消息失败：\n\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     ResetButtonState(button);
                 }
             }
-            else // 停止任务
+            else
             {
                 cts?.Cancel();
                 cts = null;
