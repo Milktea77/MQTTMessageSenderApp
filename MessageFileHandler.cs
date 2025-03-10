@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -22,9 +23,9 @@ namespace MQTTMessageSenderApp
         }
 
 
-        public static async Task<string> ReadMessageAsync(Dictionary<string, string> configuredValues)
+        public static async Task<string> ReadMessageAsync()
         {
-            string messageFile = "sim_message.txt";
+            string messageFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sim_message.txt");
             if (!File.Exists(messageFile))
             {
                 throw new FileNotFoundException($"消息文件 '{messageFile}' 不存在！");
@@ -34,41 +35,40 @@ namespace MQTTMessageSenderApp
             var jsonDict = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
             long currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            // 🚀 更新根级 `ts`
-            if (jsonDict.ContainsKey("ts"))
-            {
-                jsonDict["ts"] = currentTimestamp;
-            }
-            else
-            {
-                jsonDict.Add("ts", currentTimestamp);
-            }
+            jsonDict["ts"] = currentTimestamp; // 更新根级 ts
 
             if (jsonDict.ContainsKey("devs"))
             {
-                foreach (var dev in JsonSerializer.Deserialize<List<Dictionary<string, object>>>(jsonDict["devs"].ToString()))
-                {
-                    foreach (var data in JsonSerializer.Deserialize<List<Dictionary<string, object>>>(dev["d"].ToString()))
-                    {
-                        // 🚀 更新 `ts`
-                        data["ts"] = currentTimestamp;
+                List<Dictionary<string, object>> devices = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(jsonDict["devs"].ToString());
 
-                        // 🚀 替换 `m-v`
-                        string m = data["m"].ToString();
-                        if (configuredValues != null && configuredValues.ContainsKey(m))
+                foreach (var dev in devices)
+                {
+                    if (dev.ContainsKey("d"))
+                    {
+                        List<Dictionary<string, object>> deviceData = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(dev["d"].ToString());
+
+                        foreach (var data in deviceData)
                         {
-                            data["v"] = GenerateValue(configuredValues[m]);
+                            data["ts"] = currentTimestamp; // 更新设备 ts
+
+                            string vStr = data["v"].ToString();
+                            data["v"] = GenerateValue(vStr); // 转换 `[a-b,c]` 为随机数
                         }
+
+                        dev["d"] = deviceData;
                     }
                 }
+
+                jsonDict["devs"] = devices;
             }
 
-            return JsonSerializer.Serialize(jsonDict);
+            return JsonSerializer.Serialize(jsonDict, new JsonSerializerOptions { WriteIndented = true });
         }
-
 
         private static object GenerateValue(string valueConfig)
         {
+            Trace.WriteLine($"解析 GenerateValue: {valueConfig}");
+
             Match match = Regex.Match(valueConfig, @"\[(\d+(\.\d+)?)-(\d+(\.\d+)?),(\d+)\]");
             if (match.Success)
             {
@@ -76,9 +76,13 @@ namespace MQTTMessageSenderApp
                 double max = double.Parse(match.Groups[3].Value);
                 int decimalPlaces = int.Parse(match.Groups[5].Value);
 
-                return Math.Round(min + new Random().NextDouble() * (max - min), decimalPlaces);
+                double generatedValue = Math.Round(min + new Random().NextDouble() * (max - min), decimalPlaces);
+                Trace.WriteLine($"生成随机值: {generatedValue}");
+                return generatedValue;
             }
-            return valueConfig;
+
+            return double.TryParse(valueConfig, out double fixedValue) ? fixedValue : valueConfig;
         }
+
     }
 }

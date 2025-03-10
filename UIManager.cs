@@ -71,6 +71,15 @@ namespace MQTTMessageSenderApp
                 Padding = new Padding(10, 5, 10, 5)
             };
 
+            var labelConfigHint = new Label
+            {
+                Text = "保存修改的配置会使原 sim_message.txt 内容变更",
+                AutoSize = true,
+                Dock = DockStyle.Top,
+                ForeColor = Color.DarkRed,
+                Padding = new Padding(10, 5, 10, 5)
+            };
+
             var labelMinimizeHint = new Label
             {
                 Text = "点击最小化可将软件置入托盘",
@@ -97,6 +106,7 @@ namespace MQTTMessageSenderApp
             };
 
             mainPanel.Controls.Add(labelFileHint);
+            mainPanel.Controls.Add(labelConfigHint);
             mainPanel.Controls.Add(labelMinimizeHint);
             mainPanel.Controls.Add(layout);
             mainPanel.Controls.Add(buttonSend);

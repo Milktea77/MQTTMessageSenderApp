@@ -26,17 +26,17 @@ namespace MQTTMessageSenderApp
             configuredValues = new Dictionary<string, string>(values);
         }
 
-        public async Task StartSendingAsync(string broker, string portStr, string keepaliveStr, string topic, string intervalStr, CancellationToken token)
+        public async Task StartSendingAsync(string broker, string portStr, string keepaliveStr, string topic, string intervalStr, string modifiedJson, CancellationToken token)
         {
-            if (!int.TryParse(portStr, out int port) || !int.TryParse(keepaliveStr, out int keepalive) || !int.TryParse(intervalStr, out int interval))
+            if (!int.TryParse(portStr, out int port) ||
+                !int.TryParse(keepaliveStr, out int keepalive) ||
+                !int.TryParse(intervalStr, out int interval))
             {
-                throw new ArgumentException("端口、KeepAlive 和间隔时间必须是整数！");
+                throw new ArgumentException("端口、保活时间、间隔时间必须是有效的整数。");
             }
 
-            if (mqttClient.IsConnected)
-            {
-                await mqttClient.DisconnectAsync();
-            }
+            var factory = new MqttClientFactory();
+            mqttClient = factory.CreateMqttClient();
 
             mqttOptions = new MqttClientOptionsBuilder()
                 .WithTcpServer(broker, port)
@@ -47,14 +47,15 @@ namespace MQTTMessageSenderApp
 
             while (!token.IsCancellationRequested)
             {
-                string message = await MessageFileHandler.ReadMessageAsync(configuredValues);
+                // 发送 `modifiedJson`
                 var mqttMessage = new MqttApplicationMessageBuilder()
                     .WithTopic(topic)
-                    .WithPayload(message)
+                    .WithPayload(modifiedJson)
                     .Build();
 
                 await mqttClient.PublishAsync(mqttMessage, token);
-                Logger.Info($"发送数据到 '{topic}'，时间：{DateTimeOffset.UtcNow}");
+                Console.WriteLine($"发送消息成功: {modifiedJson}");
+
                 await Task.Delay(interval, token);
             }
         }

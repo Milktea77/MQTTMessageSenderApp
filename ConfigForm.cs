@@ -113,16 +113,67 @@ namespace MQTTMessageSenderApp
 
         private void SaveConfig(object sender, EventArgs e)
         {
-            foreach (var m in checkBoxes.Keys)
+            string messageFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sim_message.txt");
+            if (!File.Exists(messageFile))
             {
-                if (checkBoxes[m].Checked)
-                {
-                    valueMappings[m] = textBoxes[m].Text;
-                }
+                MessageBox.Show($"消息文件 '{messageFile}' 不存在！", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
-            this.DialogResult = DialogResult.OK;
-            this.Close();
+
+            // 🚀 先弹窗警告用户
+            DialogResult result = MessageBox.Show(
+                "保存配置将会使更改保存至 sim_message.txt，原文件内容将被更新。\n\n是否继续？",
+                "配置修改警告",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning
+            );
+
+            if (result == DialogResult.No) return; // 如果用户选择 "否"，直接返回
+
+            try
+            {
+                // 读取原 JSON 文件
+                string jsonContent = File.ReadAllText(messageFile);
+                var jsonDict = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonContent);
+
+                if (jsonDict.ContainsKey("devs"))
+                {
+                    List<Dictionary<string, object>> devices = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(jsonDict["devs"].ToString());
+
+                    foreach (var dev in devices)
+                    {
+                        if (dev.ContainsKey("d"))
+                        {
+                            List<Dictionary<string, object>> deviceData = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(dev["d"].ToString());
+
+                            foreach (var data in deviceData)
+                            {
+                                string m = data["m"].ToString();
+                                if (checkBoxes.ContainsKey(m) && checkBoxes[m].Checked) // 仅修改勾选项
+                                {
+                                    data["v"] = textBoxes[m].Text;
+                                }
+                            }
+
+                            dev["d"] = deviceData;
+                        }
+                    }
+
+                    jsonDict["devs"] = devices;
+                }
+
+                // 覆盖 `sim_message.txt`
+                File.WriteAllText(messageFile, JsonSerializer.Serialize(jsonDict, new JsonSerializerOptions { WriteIndented = true }));
+
+                MessageBox.Show("配置已保存，sim_message.txt 已更新！", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"保存失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
+
+
 
         public Dictionary<string, string> GetConfiguredValues()
         {

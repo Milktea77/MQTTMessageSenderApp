@@ -51,27 +51,15 @@ namespace MQTTMessageSenderApp
 
                 try
                 {
-                    if (MessageFileHandler.IsMessageFileEmpty())
-                    {
-                        DialogResult result = MessageBox.Show(
-                            "消息内容为空，是否继续发送？",
-                            "警告",
-                            MessageBoxButtons.YesNo,
-                            MessageBoxIcon.Warning
-                        );
+                    // 读取 JSON
+                    string modifiedJson = await MessageFileHandler.ReadMessageAsync();
+                    Console.WriteLine($"MainForm 读取 JSON: {modifiedJson}");
 
-                        if (result == DialogResult.No)
-                        {
-                            ResetButtonState(button);
-                            return;
-                        }
-                    }
-
-                    string message = await MessageFileHandler.ReadMessageAsync(configuredValues);
                     isSending = true;
                     button.Text = "Stop";
                     cts = new CancellationTokenSource();
-                    await mqttManager.StartSendingAsync(broker, portStr, keepaliveStr, topic, intervalStr, cts.Token);
+
+                    await mqttManager.StartSendingAsync(broker, portStr, keepaliveStr, topic, intervalStr, modifiedJson, cts.Token);
                 }
                 catch (Exception ex)
                 {
@@ -81,18 +69,12 @@ namespace MQTTMessageSenderApp
             }
             else
             {
-                if (mqttManager != null)
-                {
-                    await mqttManager.StopSendingAsync(); // 新增断开 MQTT 连接
-                }
-
                 cts?.Cancel();
                 cts = null;
                 isSending = false;
                 button.Text = "Send";
             }
         }
-
 
         public void ResetButtonState(Button button)
         {
