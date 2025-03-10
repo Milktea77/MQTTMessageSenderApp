@@ -2,61 +2,83 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace MQTTMessageSenderApp
 {
     public static class MessageFileHandler
     {
-        private static readonly string messageFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sim_message.txt");
-
-        /// <summary>
-        /// 检查 `sim_message.txt` 是否为空
-        /// </summary>
         public static bool IsMessageFileEmpty()
         {
+            string messageFile = "sim_message.txt";
             if (!File.Exists(messageFile))
             {
-                return true; // 🚀 如果文件不存在，则认为是“空”文件
+                return true; // 文件不存在视为空
             }
 
             string content = File.ReadAllText(messageFile);
-            return string.IsNullOrWhiteSpace(content);
+            return string.IsNullOrWhiteSpace(content); // 内容为空或仅有空格
         }
 
-        /// <summary>
-        /// 读取 `sim_message.txt` 并自动替换 `ts` 字段为当前时间戳
-        /// </summary>
-        public static async Task<string> ReadMessageAsync()
+
+        public static async Task<string> ReadMessageAsync(Dictionary<string, string> configuredValues)
         {
+            string messageFile = "sim_message.txt";
             if (!File.Exists(messageFile))
             {
-                throw new FileNotFoundException($"消息文件 '{messageFile}' 在同目录中不存在！");
+                throw new FileNotFoundException($"消息文件 '{messageFile}' 不存在！");
             }
 
             string content = await File.ReadAllTextAsync(messageFile);
+            var jsonDict = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
+            long currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            if (string.IsNullOrWhiteSpace(content))
+            // 🚀 更新根级 `ts`
+            if (jsonDict.ContainsKey("ts"))
             {
-                return content; // 🚀 如果内容为空，直接返回，不修改
+                jsonDict["ts"] = currentTimestamp;
+            }
+            else
+            {
+                jsonDict.Add("ts", currentTimestamp);
             }
 
-            try
+            if (jsonDict.ContainsKey("devs"))
             {
-                // 解析 JSON 数据
-                var jsonDict = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
+                foreach (var dev in JsonSerializer.Deserialize<List<Dictionary<string, object>>>(jsonDict["devs"].ToString()))
+                {
+                    foreach (var data in JsonSerializer.Deserialize<List<Dictionary<string, object>>>(dev["d"].ToString()))
+                    {
+                        // 🚀 更新 `ts`
+                        data["ts"] = currentTimestamp;
 
-                // 🚀 自动替换 `ts` 字段为当前时间戳
-                jsonDict["ts"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
-                // 重新序列化 JSON 并返回
-                return JsonSerializer.Serialize(jsonDict);
+                        // 🚀 替换 `m-v`
+                        string m = data["m"].ToString();
+                        if (configuredValues != null && configuredValues.ContainsKey(m))
+                        {
+                            data["v"] = GenerateValue(configuredValues[m]);
+                        }
+                    }
+                }
             }
-            catch (JsonException)
+
+            return JsonSerializer.Serialize(jsonDict);
+        }
+
+
+        private static object GenerateValue(string valueConfig)
+        {
+            Match match = Regex.Match(valueConfig, @"\[(\d+(\.\d+)?)-(\d+(\.\d+)?),(\d+)\]");
+            if (match.Success)
             {
-                // 🚀 不是 JSON 格式，直接返回原始内容，不修改
-                return content;
+                double min = double.Parse(match.Groups[1].Value);
+                double max = double.Parse(match.Groups[3].Value);
+                int decimalPlaces = int.Parse(match.Groups[5].Value);
+
+                return Math.Round(min + new Random().NextDouble() * (max - min), decimalPlaces);
             }
+            return valueConfig;
         }
     }
 }

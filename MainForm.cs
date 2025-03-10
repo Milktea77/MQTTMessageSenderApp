@@ -1,7 +1,6 @@
 using System;
 using System.Drawing;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -14,6 +13,7 @@ namespace MQTTMessageSenderApp
         private TrayManager trayManager;
         private CancellationTokenSource cts;
         private bool isSending = false;
+        private Dictionary<string, string> configuredValues = new Dictionary<string, string>();
 
         public MainForm(string title)
         {
@@ -23,11 +23,21 @@ namespace MQTTMessageSenderApp
 
             mqttManager = new MqttClientManager();
             trayManager = new TrayManager(this);
+
+            // 新增 "配置功能值" 按钮
+            Button configButton = new Button
+            {
+                Text = "配置功能值",
+                Dock = DockStyle.Top
+            };
+            configButton.Click += OpenConfigWindow;
+
+            this.Controls.Add(configButton);
         }
 
         public async Task ToggleSendAsync(Button button, string broker, string portStr, string keepaliveStr, string topic, string intervalStr)
         {
-            if (!isSending) // 当前未发送，点击后启动发送任务
+            if (!isSending)
             {
                 if (!int.TryParse(portStr, out int port) ||
                     !int.TryParse(keepaliveStr, out int keepalive) ||
@@ -41,7 +51,6 @@ namespace MQTTMessageSenderApp
 
                 try
                 {
-                    // 先检查 `sim_message.txt` 是否为空
                     if (MessageFileHandler.IsMessageFileEmpty())
                     {
                         DialogResult result = MessageBox.Show(
@@ -54,11 +63,11 @@ namespace MQTTMessageSenderApp
                         if (result == DialogResult.No)
                         {
                             ResetButtonState(button);
-                            return; // 用户选择“否”，取消发送
+                            return;
                         }
                     }
 
-                    string message = await MessageFileHandler.ReadMessageAsync(); // 读取消息
+                    string message = await MessageFileHandler.ReadMessageAsync(configuredValues);
                     isSending = true;
                     button.Text = "Stop";
                     cts = new CancellationTokenSource();
@@ -72,6 +81,11 @@ namespace MQTTMessageSenderApp
             }
             else
             {
+                if (mqttManager != null)
+                {
+                    await mqttManager.StopSendingAsync(); // 新增断开 MQTT 连接
+                }
+
                 cts?.Cancel();
                 cts = null;
                 isSending = false;
@@ -79,9 +93,10 @@ namespace MQTTMessageSenderApp
             }
         }
 
+
         public void ResetButtonState(Button button)
         {
-            if (button?.IsDisposed == true) return; // 按钮已经被销毁，直接返回
+            if (button?.IsDisposed == true) return;
 
             if (button?.InvokeRequired == true)
             {
@@ -90,8 +105,18 @@ namespace MQTTMessageSenderApp
             }
 
             button.Text = "Send";
-            isSending = false; // 确保状态同步为未发送
+            isSending = false;
             cts = null;
+        }
+
+        private void OpenConfigWindow(object sender, EventArgs e)
+        {
+            ConfigForm configForm = new ConfigForm(configuredValues);
+            if (configForm.ShowDialog() == DialogResult.OK)
+            {
+                configuredValues = configForm.GetConfiguredValues();
+                mqttManager.SetConfiguredValues(configuredValues); // 确保 `m-v` 值传递给 `mqttManager`
+            }
         }
 
     }
