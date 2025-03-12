@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Threading;
@@ -51,15 +52,12 @@ namespace MQTTMessageSenderApp
 
                 try
                 {
-                    // 读取 JSON
-                    string modifiedJson = await MessageFileHandler.ReadMessageAsync();
-                    Console.WriteLine($"MainForm 读取 JSON: {modifiedJson}");
-
                     isSending = true;
                     button.Text = "Stop";
                     cts = new CancellationTokenSource();
 
-                    await mqttManager.StartSendingAsync(broker, portStr, keepaliveStr, topic, intervalStr, modifiedJson, cts.Token);
+                    // 启动 MQTT 消息发送
+                    await mqttManager.StartSendingAsync(broker, portStr, keepaliveStr, topic, intervalStr, cts.Token);
                 }
                 catch (Exception ex)
                 {
@@ -100,6 +98,5 @@ namespace MQTTMessageSenderApp
                 mqttManager.SetConfiguredValues(configuredValues); // 确保 `m-v` 值传递给 `mqttManager`
             }
         }
-
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using MQTTnet;
@@ -26,7 +27,7 @@ namespace MQTTMessageSenderApp
             configuredValues = new Dictionary<string, string>(values);
         }
 
-        public async Task StartSendingAsync(string broker, string portStr, string keepaliveStr, string topic, string intervalStr, string modifiedJson, CancellationToken token)
+        public async Task StartSendingAsync(string broker, string portStr, string keepaliveStr, string topic, string intervalStr, CancellationToken token)
         {
             if (!int.TryParse(portStr, out int port) ||
                 !int.TryParse(keepaliveStr, out int keepalive) ||
@@ -47,18 +48,28 @@ namespace MQTTMessageSenderApp
 
             while (!token.IsCancellationRequested)
             {
-                // 发送 `modifiedJson`
-                var mqttMessage = new MqttApplicationMessageBuilder()
-                    .WithTopic(topic)
-                    .WithPayload(modifiedJson)
-                    .Build();
+                try
+                {
+                    // 每次发送前重新读取并更新消息内容，确保 ts 更新
+                    string modifiedJson = await MessageFileHandler.ReadMessageAsync();
 
-                await mqttClient.PublishAsync(mqttMessage, token);
-                Console.WriteLine($"发送消息成功: {modifiedJson}");
+                    var mqttMessage = new MqttApplicationMessageBuilder()
+                        .WithTopic(topic)
+                        .WithPayload(modifiedJson)
+                        .Build();
+
+                    await mqttClient.PublishAsync(mqttMessage, token);
+                    Trace.WriteLine($"发送消息成功: {modifiedJson}");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"发送消息失败: {ex.Message}");
+                }
 
                 await Task.Delay(interval, token);
             }
         }
+
 
         public async Task StopSendingAsync()
         {

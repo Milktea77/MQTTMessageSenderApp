@@ -35,24 +35,30 @@ namespace MQTTMessageSenderApp
             var jsonDict = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
             long currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            jsonDict["ts"] = currentTimestamp; // 更新根级 ts
+            // 更新根级 ts
+            jsonDict["ts"] = currentTimestamp;
 
-            if (jsonDict.ContainsKey("devs"))
+            if (jsonDict.ContainsKey("devs") && jsonDict["devs"] is JsonElement devsElement)
             {
-                List<Dictionary<string, object>> devices = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(jsonDict["devs"].ToString());
+                var devices = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(devsElement.GetRawText());
 
                 foreach (var dev in devices)
                 {
-                    if (dev.ContainsKey("d"))
+                    dev["ts"] = currentTimestamp; // 更新每个设备的 ts
+
+                    if (dev.ContainsKey("d") && dev["d"] is JsonElement dElement)
                     {
-                        List<Dictionary<string, object>> deviceData = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(dev["d"].ToString());
+                        var deviceData = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(dElement.GetRawText());
 
                         foreach (var data in deviceData)
                         {
-                            data["ts"] = currentTimestamp; // 更新设备 ts
+                            data["ts"] = currentTimestamp; // 更新设备数据的 ts
 
-                            string vStr = data["v"].ToString();
-                            data["v"] = GenerateValue(vStr); // 转换 `[a-b,c]` 为随机数
+                            if (data.ContainsKey("v") && data["v"] is JsonElement vElement)
+                            {
+                                string vStr = vElement.GetRawText().Trim('"'); // 解析 v 字符串
+                                data["v"] = GenerateValue(vStr);
+                            }
                         }
 
                         dev["d"] = deviceData;
@@ -64,6 +70,7 @@ namespace MQTTMessageSenderApp
 
             return JsonSerializer.Serialize(jsonDict, new JsonSerializerOptions { WriteIndented = true });
         }
+
 
         private static object GenerateValue(string valueConfig)
         {
