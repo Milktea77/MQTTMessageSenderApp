@@ -15,6 +15,7 @@ namespace MQTTMessageSenderApp
         private CancellationTokenSource cts;
         private bool isSending = false;
         private Dictionary<string, string> configuredValues = new Dictionary<string, string>();
+        private Button configButton;
 
         public MainForm(string title)
         {
@@ -26,10 +27,11 @@ namespace MQTTMessageSenderApp
             trayManager = new TrayManager(this);
 
             // 新增 "配置功能值" 按钮
-            Button configButton = new Button
+            configButton = new Button
             {
                 Text = "配置功能值",
-                Dock = DockStyle.Top
+                Dock = DockStyle.Top,
+                Enabled = true // 初始状态可点击
             };
             configButton.Click += OpenConfigWindow;
 
@@ -54,6 +56,7 @@ namespace MQTTMessageSenderApp
                 {
                     isSending = true;
                     button.Text = "Stop";
+                    configButton.Enabled = false; // 发送期间禁用配置按钮
                     cts = new CancellationTokenSource();
 
                     // 启动 MQTT 消息发送
@@ -71,6 +74,7 @@ namespace MQTTMessageSenderApp
                 cts = null;
                 isSending = false;
                 button.Text = "Send";
+                configButton.Enabled = true; // 停止发送后启用配置按钮
             }
         }
 
@@ -87,6 +91,7 @@ namespace MQTTMessageSenderApp
             button.Text = "Send";
             isSending = false;
             cts = null;
+            configButton.Enabled = true; // 确保发生错误时重新启用配置按钮
         }
 
         private void OpenConfigWindow(object sender, EventArgs e)
