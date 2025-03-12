@@ -169,7 +169,26 @@ namespace MQTTMessageSenderApp
                                 string m = data["m"].ToString();
                                 if (checkBoxes.ContainsKey(m) && checkBoxes[m].Checked)
                                 {
-                                    data["v"] = textBoxes[m].Text;
+                                    string valueConfig = textBoxes[m].Text;
+                                    Match match = Regex.Match(valueConfig, @"\[(\d+(\.\d+)?)-(\d+(\.\d+)?),(\d+),(\d+(\.\d+)?)\]");
+                                    if (match.Success)
+                                    {
+                                        decimal min = decimal.Parse(match.Groups[1].Value);
+                                        decimal max = decimal.Parse(match.Groups[3].Value);
+                                        int decimalPlaces = int.Parse(match.Groups[5].Value);
+
+                                        int minDecimalPlaces = match.Groups[1].Value.Contains(".") ? match.Groups[1].Value.Split('.')[1].Length : 0;
+                                        int maxDecimalPlaces = match.Groups[3].Value.Contains(".") ? match.Groups[3].Value.Split('.')[1].Length : 0;
+                                        int requiredDecimalPlaces = Math.Max(minDecimalPlaces, maxDecimalPlaces);
+
+                                        if (decimalPlaces < requiredDecimalPlaces)
+                                        {
+                                            MessageBox.Show($"错误: {m} 的小数位数 {decimalPlaces} 不能小于 a({min}) 或 b({max}) 的小数位数 {requiredDecimalPlaces}", "格式错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                            return;
+                                        }
+                                    }
+
+                                    data["v"] = valueConfig;
                                 }
                             }
 
