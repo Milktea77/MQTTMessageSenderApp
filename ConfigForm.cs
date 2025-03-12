@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace MQTTMessageSenderApp
@@ -10,13 +11,14 @@ namespace MQTTMessageSenderApp
     {
         private Dictionary<string, string> valueMappings;
         private Dictionary<string, CheckBox> checkBoxes = new Dictionary<string, CheckBox>();
+        private Dictionary<string, CheckBox> incrementCheckBoxes = new Dictionary<string, CheckBox>();
         private Dictionary<string, TextBox> textBoxes = new Dictionary<string, TextBox>();
         private TableLayoutPanel tableLayout;
 
         public ConfigForm(Dictionary<string, string> existingValues)
         {
             this.Text = "功能值配置";
-            this.ClientSize = new System.Drawing.Size(500, 500);
+            this.ClientSize = new System.Drawing.Size(600, 500);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.StartPosition = FormStartPosition.CenterParent;
 
@@ -34,7 +36,7 @@ namespace MQTTMessageSenderApp
 
             tableLayout = new TableLayoutPanel
             {
-                ColumnCount = 3,
+                ColumnCount = 4,
                 Dock = DockStyle.Fill,
                 AutoSize = true
             };
@@ -42,6 +44,7 @@ namespace MQTTMessageSenderApp
             tableLayout.Controls.Add(new Label { Text = "选择", AutoSize = true }, 0, 0);
             tableLayout.Controls.Add(new Label { Text = "功能名称", AutoSize = true }, 1, 0);
             tableLayout.Controls.Add(new Label { Text = "值 (可编辑)", AutoSize = true }, 2, 0);
+            tableLayout.Controls.Add(new Label { Text = "递增", AutoSize = true }, 3, 0);
 
             this.Controls.Add(saveButton);
             this.Controls.Add(tableLayout);
@@ -53,10 +56,12 @@ namespace MQTTMessageSenderApp
             tableLayout.Controls.Clear();
             checkBoxes.Clear();
             textBoxes.Clear();
+            incrementCheckBoxes.Clear();
 
             tableLayout.Controls.Add(new Label { Text = "选择", AutoSize = true }, 0, 0);
             tableLayout.Controls.Add(new Label { Text = "功能名称", AutoSize = true }, 1, 0);
             tableLayout.Controls.Add(new Label { Text = "值 (可编辑)", AutoSize = true }, 2, 0);
+            tableLayout.Controls.Add(new Label { Text = "递增", AutoSize = true }, 3, 0);
 
             try
             {
@@ -84,18 +89,33 @@ namespace MQTTMessageSenderApp
                                         uniqueFunctions.Add(m);
 
                                         CheckBox checkBox = new CheckBox();
+                                        CheckBox incrementCheckBox = new CheckBox { Enabled = false };
                                         Label mLabel = new Label { Text = m, AutoSize = true };
                                         TextBox vTextBox = new TextBox { Text = v, Enabled = false, Width = 100 };
 
-                                        checkBox.CheckedChanged += (s, ev) => vTextBox.Enabled = checkBox.Checked;
+                                        checkBox.CheckedChanged += (s, ev) =>
+                                        {
+                                            vTextBox.Enabled = checkBox.Checked;
+                                            incrementCheckBox.Enabled = checkBox.Checked;
+                                        };
+
+                                        incrementCheckBox.CheckedChanged += (s, ev) =>
+                                        {
+                                            if (incrementCheckBox.Checked)
+                                            {
+                                                vTextBox.Text = "[a-b,c,d]";
+                                            }
+                                        };
 
                                         checkBoxes[m] = checkBox;
+                                        incrementCheckBoxes[m] = incrementCheckBox;
                                         textBoxes[m] = vTextBox;
                                         valueMappings[m] = v;
 
                                         tableLayout.Controls.Add(checkBox, 0, row);
                                         tableLayout.Controls.Add(mLabel, 1, row);
                                         tableLayout.Controls.Add(vTextBox, 2, row);
+                                        tableLayout.Controls.Add(incrementCheckBox, 3, row);
 
                                         row++;
                                     }
@@ -113,14 +133,6 @@ namespace MQTTMessageSenderApp
 
         private void SaveConfig(object sender, EventArgs e)
         {
-            string messageFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sim_message.txt");
-            if (!File.Exists(messageFile))
-            {
-                MessageBox.Show($"消息文件 '{messageFile}' 不存在！", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            // 🚀 先弹窗警告用户
             DialogResult result = MessageBox.Show(
                 "保存配置将会使更改保存至 sim_message.txt，原文件内容将被更新。\n\n是否继续？",
                 "配置修改警告",
@@ -128,11 +140,17 @@ namespace MQTTMessageSenderApp
                 MessageBoxIcon.Warning
             );
 
-            if (result == DialogResult.No) return; // 如果用户选择 "否"，直接返回
+            if (result == DialogResult.No) return;
 
             try
             {
-                // 读取原 JSON 文件
+                string messageFile = "sim_message.txt";
+                if (!File.Exists(messageFile))
+                {
+                    MessageBox.Show($"消息文件 '{messageFile}' 不存在！", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
                 string jsonContent = File.ReadAllText(messageFile);
                 var jsonDict = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonContent);
 
@@ -149,7 +167,7 @@ namespace MQTTMessageSenderApp
                             foreach (var data in deviceData)
                             {
                                 string m = data["m"].ToString();
-                                if (checkBoxes.ContainsKey(m) && checkBoxes[m].Checked) // 仅修改勾选项
+                                if (checkBoxes.ContainsKey(m) && checkBoxes[m].Checked)
                                 {
                                     data["v"] = textBoxes[m].Text;
                                 }
@@ -162,9 +180,7 @@ namespace MQTTMessageSenderApp
                     jsonDict["devs"] = devices;
                 }
 
-                // 覆盖 `sim_message.txt`
                 File.WriteAllText(messageFile, JsonSerializer.Serialize(jsonDict, new JsonSerializerOptions { WriteIndented = true }));
-
                 MessageBox.Show("配置已保存，sim_message.txt 已更新！", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
@@ -172,8 +188,6 @@ namespace MQTTMessageSenderApp
                 MessageBox.Show($"保存失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
-
-
 
         public Dictionary<string, string> GetConfiguredValues()
         {

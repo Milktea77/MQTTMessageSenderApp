@@ -59,7 +59,7 @@ namespace MQTTMessageSenderApp
                         .Build();
 
                     await mqttClient.PublishAsync(mqttMessage, token);
-                    Trace.WriteLine($"发送消息成功: {modifiedJson}");
+                    // Trace.WriteLine($"发送消息成功: {modifiedJson}");
                 }
                 catch (Exception ex)
                 {
