@@ -10,7 +10,7 @@ namespace MQTTMessageSenderApp
 {
     public static class MessageFileHandler
     {
-        private static Dictionary<string, Dictionary<string, double>> incrementValues = new Dictionary<string, Dictionary<string, double>>();
+        private static Dictionary<string, Dictionary<string, decimal>> incrementValues = new Dictionary<string, Dictionary<string, decimal>>();
 
         public static bool IsMessageFileEmpty()
         {
@@ -78,14 +78,14 @@ namespace MQTTMessageSenderApp
             Match match = Regex.Match(valueConfig, @"\[(\d+(\.\d+)?)-(\d+(\.\d+)?),(\d+),(\d+(\.\d+)?)\]");
             if (match.Success)
             {
-                double min = double.Parse(match.Groups[1].Value);
-                double max = double.Parse(match.Groups[3].Value);
+                decimal min = decimal.Parse(match.Groups[1].Value);
+                decimal max = decimal.Parse(match.Groups[3].Value);
                 int decimalPlaces = int.Parse(match.Groups[5].Value);
-                double startValue = double.Parse(match.Groups[6].Value);
+                decimal startValue = decimal.Parse(match.Groups[6].Value);
 
                 if (!incrementValues.ContainsKey(deviceId))
                 {
-                    incrementValues[deviceId] = new Dictionary<string, double>();
+                    incrementValues[deviceId] = new Dictionary<string, decimal>();
                 }
 
                 if (!incrementValues[deviceId].ContainsKey(functionName))
@@ -94,9 +94,11 @@ namespace MQTTMessageSenderApp
                 }
                 else
                 {
-                    double step = Math.Round(min + new Random().NextDouble() * (max - min), decimalPlaces);
-                    incrementValues[deviceId][functionName] += step;
-                    double currentValue = incrementValues[deviceId][functionName];
+                    // 修正: `NextDouble()` 转换为 `decimal`
+                    decimal step = Math.Round(min + (decimal)(new Random().NextDouble()) * (max - min), decimalPlaces);
+                    incrementValues[deviceId][functionName] = Math.Round(incrementValues[deviceId][functionName] + step, decimalPlaces, MidpointRounding.AwayFromZero);
+
+                    decimal currentValue = incrementValues[deviceId][functionName];
 
                     Trace.WriteLine($"设备: {deviceId}, 功能: {functionName}, 初始值: {startValue}, 递增步长: {step}, 当前值: {currentValue}");
                 }
@@ -107,16 +109,18 @@ namespace MQTTMessageSenderApp
             Match standardMatch = Regex.Match(valueConfig, @"\[(\d+(\.\d+)?)-(\d+(\.\d+)?),(\d+)\]");
             if (standardMatch.Success)
             {
-                double min = double.Parse(standardMatch.Groups[1].Value);
-                double max = double.Parse(standardMatch.Groups[3].Value);
+                decimal min = decimal.Parse(standardMatch.Groups[1].Value);
+                decimal max = decimal.Parse(standardMatch.Groups[3].Value);
                 int decimalPlaces = int.Parse(standardMatch.Groups[5].Value);
 
-                double generatedValue = Math.Round(min + new Random().NextDouble() * (max - min), decimalPlaces);
+                // 修正: `NextDouble()` 转换为 `decimal`
+                decimal generatedValue = Math.Round(min + (decimal)(new Random().NextDouble()) * (max - min), decimalPlaces, MidpointRounding.AwayFromZero);
                 Trace.WriteLine($"生成随机值: {generatedValue}");
                 return generatedValue;
             }
 
-            return double.TryParse(valueConfig, out double fixedValue) ? fixedValue : valueConfig;
+            return decimal.TryParse(valueConfig, out decimal fixedValue) ? Math.Round(fixedValue, 2, MidpointRounding.AwayFromZero) : valueConfig;
         }
+
     }
 }
