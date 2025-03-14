@@ -22,7 +22,7 @@ namespace MQTTMessageSenderApp
                        "保留 c 位小数的随机数；\n" +
                        "首次发送时 d 将作为第一个值发送\n\n" +
                        "以上功能仅在单次发送周期内生效。\n\n" +
-                       "Version: 0.4.6.4-rc\n\n" +
+                       "Version: 0.4.6.5-rc\n\n" +
                        "Welcome Aboard!  -- ANA3401",
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
