@@ -9,7 +9,7 @@ namespace MQTTMessageSenderApp
         public InstructionForm()
         {
             Text = "使用说明";
-            Size = new Size(450, 250);
+            Size = new Size(450, 450);
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Color.White;
 
@@ -21,7 +21,9 @@ namespace MQTTMessageSenderApp
                        "指由 d 作为起始值，每次增长步长为 a-b 之间\n" +
                        "保留 c 位小数的随机数；\n" +
                        "首次发送时 d 将作为第一个值发送\n\n" +
-                       "以上功能仅在单次发送周期内生效。",
+                       "以上功能仅在单次发送周期内生效。\n\n" +
+                       "Version: 0.4.6.4-rc\n\n" +
+                       "Welcome Aboard!  -- ANA3401",
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(20),
