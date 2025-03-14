@@ -30,6 +30,7 @@ namespace MQTTMessageSenderApp
         {
             if (!isSending)
             {
+                // 检查输入是否合法
                 if (!int.TryParse(portStr, out int port) ||
                     !int.TryParse(keepaliveStr, out int keepalive) ||
                     !int.TryParse(intervalStr, out int interval) ||
@@ -45,24 +46,40 @@ namespace MQTTMessageSenderApp
                     isSending = true;
                     button.Text = "Stop";
                     UIManager.SetConfigButtonEnabled(false); // 发送期间禁用配置按钮
+                    trayManager.UpdateTopic(topic); // 更新托盘目标Topic
+                    trayManager.SetRunningStatus(true); // 设置托盘状态为"运行中"
+
+                    cts?.Cancel(); // 取消之前可能未释放的 `CancellationTokenSource`
                     cts = new CancellationTokenSource();
 
                     // 启动 MQTT 消息发送
                     await mqttManager.StartSendingAsync(broker, portStr, keepaliveStr, topic, intervalStr, cts.Token);
                 }
+                catch (OperationCanceledException)
+                {
+                    // 用户主动取消，不弹出错误
+                    MessageBox.Show("消息发送已取消！", "通知", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
                 catch (Exception ex)
                 {
                     MessageBox.Show($"发送消息失败：\n\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                finally
+                {
+                    // 发生异常或取消后确保按钮恢复状态
                     ResetButtonState(button);
+                    trayManager.SetRunningStatus(false); // 设置托盘状态为"未运行"
                 }
             }
             else
             {
+                // 取消发送
                 cts?.Cancel();
                 cts = null;
                 isSending = false;
                 button.Text = "Send";
                 UIManager.SetConfigButtonEnabled(true); // 停止发送后启用配置按钮
+                trayManager.SetRunningStatus(false); // 设置托盘状态为"未运行"
             }
         }
 
