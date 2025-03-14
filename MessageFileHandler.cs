@@ -36,7 +36,6 @@ namespace MQTTMessageSenderApp
             var jsonDict = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
             long currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            // 更新根级 ts
             jsonDict["ts"] = currentTimestamp;
 
             if (jsonDict.ContainsKey("devs") && jsonDict["devs"] is JsonElement devsElement)
@@ -46,7 +45,7 @@ namespace MQTTMessageSenderApp
                 foreach (var dev in devices)
                 {
                     string deviceId = dev["dev"].ToString();
-                    dev["ts"] = currentTimestamp; // 更新每个设备的 ts
+                    dev["ts"] = currentTimestamp;
 
                     if (dev.ContainsKey("d") && dev["d"] is JsonElement dElement)
                     {
@@ -54,25 +53,31 @@ namespace MQTTMessageSenderApp
 
                         foreach (var data in deviceData)
                         {
-                            data["ts"] = currentTimestamp; // 更新设备数据的 ts
+                            data["ts"] = currentTimestamp;
 
                             if (data.ContainsKey("v") && data["v"] is JsonElement vElement)
                             {
-                                if (vElement.ValueKind == JsonValueKind.True || vElement.ValueKind == JsonValueKind.False)
+                                switch (vElement.ValueKind)
                                 {
-                                    // 原始 JSON 中 true/false 直接按布尔值保留
-                                    data["v"] = vElement.GetBoolean();
-                                }
-                                else if (vElement.ValueKind == JsonValueKind.String)
-                                {
-                                    // 只要 JSON 原文中是字符串，就保持字符串格式
-                                    data["v"] = vElement.GetString();
-                                }
-                                else
-                                {
-                                    // 其他情况（如数值、对象等）正常解析
-                                    string vStr = vElement.GetRawText().Trim('"');
-                                    data["v"] = GenerateValue(deviceId, data["m"].ToString(), vStr);
+                                    case JsonValueKind.Number:
+                                        // 确保数值不丢失小数位
+                                        data["v"] = vElement.GetDouble();
+                                        break;
+
+                                    case JsonValueKind.True:
+                                    case JsonValueKind.False:
+                                        data["v"] = vElement.GetBoolean();
+                                        break;
+
+                                    case JsonValueKind.String:
+                                        data["v"] = vElement.GetString();
+                                        break;
+
+                                    default:
+                                        // 只有当 `v` 需要递增/随机时，才修改 `v`
+                                        string vStr = vElement.GetRawText().Trim('"');
+                                        data["v"] = GenerateValue(deviceId, data["m"].ToString(), vStr);
+                                        break;
                                 }
                             }
                         }
@@ -87,7 +92,6 @@ namespace MQTTMessageSenderApp
             return JsonSerializer.Serialize(jsonDict, new JsonSerializerOptions { WriteIndented = true });
         }
 
-
         private static object GenerateValue(string deviceId, string functionName, string valueConfig)
         {
             Random random = new Random();
@@ -101,17 +105,6 @@ namespace MQTTMessageSenderApp
                 int decimalPlaces = int.Parse(match.Groups[5].Value);
                 decimal startValue = decimal.Parse(match.Groups[6].Value);
 
-                // 计算 min 和 max 的小数位数
-                int minDecimalPlaces = match.Groups[1].Value.Contains(".") ? match.Groups[1].Value.Split('.')[1].Length : 0;
-                int maxDecimalPlaces = match.Groups[3].Value.Contains(".") ? match.Groups[3].Value.Split('.')[1].Length : 0;
-                int requiredDecimalPlaces = Math.Max(minDecimalPlaces, maxDecimalPlaces);
-
-                // 校验: decimalPlaces 不能小于 min/max 的小数位数
-                if (decimalPlaces < requiredDecimalPlaces)
-                {
-                    throw new ArgumentException($"无效的格式: 指定的小数位数 {decimalPlaces} 不能小于 a({min}) 或 b({max}) 的实际小数位数 {requiredDecimalPlaces}");
-                }
-
                 if (!incrementValues.ContainsKey(deviceId))
                 {
                     incrementValues[deviceId] = new Dictionary<string, decimal>();
@@ -123,15 +116,11 @@ namespace MQTTMessageSenderApp
                 }
                 else
                 {
-                    // 生成随机步长（支持小数）
                     decimal step = Math.Round((decimal)(random.NextDouble()) * (max - min) + min, decimalPlaces);
                     incrementValues[deviceId][functionName] = Math.Round(incrementValues[deviceId][functionName] + step, decimalPlaces, MidpointRounding.AwayFromZero);
                 }
 
-                decimal currentValue = incrementValues[deviceId][functionName];
-
-                Trace.WriteLine($"设备: {deviceId}, 功能: {functionName}, 初始值: {startValue}, 递增步长: {min}-{max}, 当前值: {currentValue}");
-                return currentValue;
+                return incrementValues[deviceId][functionName];
             }
 
             // 解析随机数模式: [a-b,c]
@@ -142,25 +131,18 @@ namespace MQTTMessageSenderApp
                 decimal max = decimal.Parse(standardMatch.Groups[3].Value);
                 int decimalPlaces = int.Parse(standardMatch.Groups[5].Value);
 
-                // 计算 min 和 max 的小数位数
-                int minDecimalPlaces = standardMatch.Groups[1].Value.Contains(".") ? standardMatch.Groups[1].Value.Split('.')[1].Length : 0;
-                int maxDecimalPlaces = standardMatch.Groups[3].Value.Contains(".") ? standardMatch.Groups[3].Value.Split('.')[1].Length : 0;
-                int requiredDecimalPlaces = Math.Max(minDecimalPlaces, maxDecimalPlaces);
-
-                // 校验: decimalPlaces 不能小于 min/max 的小数位数
-                if (decimalPlaces < requiredDecimalPlaces)
-                {
-                    throw new ArgumentException($"无效的格式: 指定的小数位数 {decimalPlaces} 不能小于 a({min}) 或 b({max}) 的实际小数位数 {requiredDecimalPlaces}");
-                }
-
-                // 生成随机数
                 decimal generatedValue = Math.Round((decimal)(random.NextDouble()) * (max - min) + min, decimalPlaces, MidpointRounding.AwayFromZero);
-                Trace.WriteLine($"生成随机值: {generatedValue}");
                 return generatedValue;
             }
 
-            // 解析固定数值
-            return decimal.TryParse(valueConfig, out decimal fixedValue) ? Math.Round(fixedValue, 2, MidpointRounding.AwayFromZero) : valueConfig;
+            // 默认情况下，不修改 v
+            if (double.TryParse(valueConfig, out double fixedValue))
+            {
+                return fixedValue; // 保持原小数位数，不进行 Math.Round()
+            }
+
+            return valueConfig;
         }
+
     }
 }
