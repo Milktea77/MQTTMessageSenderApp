@@ -58,8 +58,22 @@ namespace MQTTMessageSenderApp
 
                             if (data.ContainsKey("v") && data["v"] is JsonElement vElement)
                             {
-                                string vStr = vElement.GetRawText().Trim('"'); // 解析 v 字符串
-                                data["v"] = GenerateValue(deviceId, data["m"].ToString(), vStr);
+                                if (vElement.ValueKind == JsonValueKind.True || vElement.ValueKind == JsonValueKind.False)
+                                {
+                                    // 原始 JSON 中 true/false 直接按布尔值保留
+                                    data["v"] = vElement.GetBoolean();
+                                }
+                                else if (vElement.ValueKind == JsonValueKind.String)
+                                {
+                                    // 只要 JSON 原文中是字符串，就保持字符串格式
+                                    data["v"] = vElement.GetString();
+                                }
+                                else
+                                {
+                                    // 其他情况（如数值、对象等）正常解析
+                                    string vStr = vElement.GetRawText().Trim('"');
+                                    data["v"] = GenerateValue(deviceId, data["m"].ToString(), vStr);
+                                }
                             }
                         }
 
@@ -72,6 +86,7 @@ namespace MQTTMessageSenderApp
 
             return JsonSerializer.Serialize(jsonDict, new JsonSerializerOptions { WriteIndented = true });
         }
+
 
         private static object GenerateValue(string deviceId, string functionName, string valueConfig)
         {
