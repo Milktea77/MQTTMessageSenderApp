@@ -169,26 +169,33 @@ namespace MQTTMessageSenderApp
                                 string m = data["m"].ToString();
                                 if (checkBoxes.ContainsKey(m) && checkBoxes[m].Checked)
                                 {
-                                    string valueConfig = textBoxes[m].Text;
-                                    Match match = Regex.Match(valueConfig, @"\[(\d+(\.\d+)?)-(\d+(\.\d+)?),(\d+),(\d+(\.\d+)?)\]");
-                                    if (match.Success)
+                                    string valueConfig = textBoxes[m].Text.Trim();
+
+                                    // 处理递增公式（例如 "[1-3,2,10]"），保持字符串存储
+                                    if (Regex.IsMatch(valueConfig, @"\[\d+(\.\d+)?-\d+(\.\d+)?,\d+,\d+(\.\d+)?\]"))
                                     {
-                                        decimal min = decimal.Parse(match.Groups[1].Value);
-                                        decimal max = decimal.Parse(match.Groups[3].Value);
-                                        int decimalPlaces = int.Parse(match.Groups[5].Value);
-
-                                        int minDecimalPlaces = match.Groups[1].Value.Contains(".") ? match.Groups[1].Value.Split('.')[1].Length : 0;
-                                        int maxDecimalPlaces = match.Groups[3].Value.Contains(".") ? match.Groups[3].Value.Split('.')[1].Length : 0;
-                                        int requiredDecimalPlaces = Math.Max(minDecimalPlaces, maxDecimalPlaces);
-
-                                        if (decimalPlaces < requiredDecimalPlaces)
-                                        {
-                                            MessageBox.Show($"错误: {m} 的小数位数 {decimalPlaces} 不能小于 a({min}) 或 b({max}) 的小数位数 {requiredDecimalPlaces}", "格式错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                                            return;
-                                        }
+                                        data["v"] = valueConfig;
                                     }
-
-                                    data["v"] = valueConfig;
+                                    // 处理布尔值（true/false）
+                                    else if (bool.TryParse(valueConfig, out bool boolValue))
+                                    {
+                                        data["v"] = boolValue;
+                                    }
+                                    // 处理整数类型
+                                    else if (int.TryParse(valueConfig, out int intValue))
+                                    {
+                                        data["v"] = intValue;
+                                    }
+                                    // 处理小数类型（确保不丢失小数位）
+                                    else if (double.TryParse(valueConfig, out double doubleValue))
+                                    {
+                                        data["v"] = doubleValue;
+                                    }
+                                    // 处理普通字符串
+                                    else
+                                    {
+                                        data["v"] = valueConfig;
+                                    }
                                 }
                             }
 
@@ -207,6 +214,7 @@ namespace MQTTMessageSenderApp
                 MessageBox.Show($"保存失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
 
         public Dictionary<string, string> GetConfiguredValues()
         {

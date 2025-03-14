@@ -60,21 +60,23 @@ namespace MQTTMessageSenderApp
                                 switch (vElement.ValueKind)
                                 {
                                     case JsonValueKind.Number:
-                                        // 确保数值不丢失小数位
+                                        // 直接解析数值，确保不会变成字符串
                                         data["v"] = vElement.GetDouble();
                                         break;
 
                                     case JsonValueKind.True:
                                     case JsonValueKind.False:
+                                        // 直接解析布尔值，不转换成字符串
                                         data["v"] = vElement.GetBoolean();
                                         break;
 
                                     case JsonValueKind.String:
-                                        data["v"] = vElement.GetString();
+                                        string rawValue = vElement.GetString();
+                                        data["v"] = ProcessValueFormat(rawValue);
                                         break;
 
                                     default:
-                                        // 只有当 `v` 需要递增/随机时，才修改 `v`
+                                        // 仅当 `v` 需要递增/随机时，才修改 `v`
                                         string vStr = vElement.GetRawText().Trim('"');
                                         data["v"] = GenerateValue(deviceId, data["m"].ToString(), vStr);
                                         break;
@@ -91,6 +93,23 @@ namespace MQTTMessageSenderApp
 
             return JsonSerializer.Serialize(jsonDict, new JsonSerializerOptions { WriteIndented = true });
         }
+
+        private static object ProcessValueFormat(string value)
+        {
+            if (double.TryParse(value, out double numericValue))
+            {
+                return numericValue; // 纯数字，直接返回 `double`，不加引号
+            }
+
+            if (bool.TryParse(value, out bool boolValue))
+            {
+                return boolValue; // 解析为布尔值，不加引号
+            }
+
+            // 含字母、递增格式 `[a-b,c,d]`，返回字符串，加引号
+            return value;
+        }
+
 
         private static object GenerateValue(string deviceId, string functionName, string valueConfig)
         {
@@ -135,13 +154,8 @@ namespace MQTTMessageSenderApp
                 return generatedValue;
             }
 
-            // 默认情况下，不修改 v
-            if (double.TryParse(valueConfig, out double fixedValue))
-            {
-                return fixedValue; // 保持原小数位数，不进行 Math.Round()
-            }
-
-            return valueConfig;
+            // 默认情况下，调用 `ProcessValueFormat()` 确保格式正确
+            return ProcessValueFormat(valueConfig);
         }
 
     }
