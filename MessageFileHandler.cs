@@ -15,13 +15,7 @@ namespace MQTTMessageSenderApp
         public static bool IsMessageFileEmpty()
         {
             string messageFile = "sim_message.txt";
-            if (!File.Exists(messageFile))
-            {
-                return true; // 文件不存在视为空
-            }
-
-            string content = File.ReadAllText(messageFile);
-            return string.IsNullOrWhiteSpace(content); // 内容为空或仅有空格
+            return !File.Exists(messageFile) || string.IsNullOrWhiteSpace(File.ReadAllText(messageFile));
         }
 
         public static async Task<string> ReadMessageAsync()
@@ -57,30 +51,8 @@ namespace MQTTMessageSenderApp
 
                             if (data.ContainsKey("v") && data["v"] is JsonElement vElement)
                             {
-                                switch (vElement.ValueKind)
-                                {
-                                    case JsonValueKind.Number:
-                                        // 直接解析数值，确保不会变成字符串
-                                        data["v"] = vElement.GetDouble();
-                                        break;
-
-                                    case JsonValueKind.True:
-                                    case JsonValueKind.False:
-                                        // 直接解析布尔值，不转换成字符串
-                                        data["v"] = vElement.GetBoolean();
-                                        break;
-
-                                    case JsonValueKind.String:
-                                        string rawValue = vElement.GetString();
-                                        data["v"] = ProcessValueFormat(rawValue);
-                                        break;
-
-                                    default:
-                                        // 仅当 `v` 需要递增/随机时，才修改 `v`
-                                        string vStr = vElement.GetRawText().Trim('"');
-                                        data["v"] = GenerateValue(deviceId, data["m"].ToString(), vStr);
-                                        break;
-                                }
+                                string rawValue = vElement.GetRawText().Trim('"');
+                                data["v"] = ProcessValueFormat(deviceId, data["m"].ToString(), rawValue);
                             }
                         }
 
@@ -94,35 +66,59 @@ namespace MQTTMessageSenderApp
             return JsonSerializer.Serialize(jsonDict, new JsonSerializerOptions { WriteIndented = true });
         }
 
-        private static object ProcessValueFormat(string value)
+        /// <summary>
+        /// 处理不同类型的值，确保：
+        /// 1. 递增/随机数公式正确解析
+        /// 2. 纯数字作为数值，不加引号
+        /// 3. 布尔值作为布尔类型，不加引号
+        /// 4. 其他内容保持字符串类型
+        /// </summary>
+        private static object ProcessValueFormat(string deviceId, string functionName, string value)
         {
+            // 1️⃣ 先检测是否是递增/随机数公式
+            if (IsIncrementOrRandomFormula(value))
+            {
+                return GenerateValue(deviceId, functionName, value);
+            }
+
+            // 2️⃣ 尝试解析数值
             if (double.TryParse(value, out double numericValue))
             {
-                return numericValue; // 纯数字，直接返回 `double`，不加引号
+                return numericValue; // 纯数字，直接返回数值
             }
 
+            // 3️⃣ 尝试解析布尔值
             if (bool.TryParse(value, out bool boolValue))
             {
-                return boolValue; // 解析为布尔值，不加引号
+                return boolValue; // 解析为布尔值
             }
 
-            // 含字母、递增格式 `[a-b,c,d]`，返回字符串，加引号
+            // 4️⃣ 其他情况（含字母、非标准格式等）作为字符串处理
             return value;
         }
 
+        /// <summary>
+        /// 检测是否是随机数或递增数公式，例如：
+        /// - [a-b,c] 随机数模式
+        /// - [a-b,c,d] 递增模式
+        /// </summary>
+        private static bool IsIncrementOrRandomFormula(string value)
+        {
+            return Regex.IsMatch(value, @"^\[\d+(\.\d+)?-\d+(\.\d+)?,\d+(,\d+(\.\d+)?)?\]$");
+        }
 
         private static object GenerateValue(string deviceId, string functionName, string valueConfig)
         {
             Random random = new Random();
 
-            // 解析递增模式: [a-b,c,d]（步长为小数）
-            Match match = Regex.Match(valueConfig, @"\[(\d+(\.\d+)?)-(\d+(\.\d+)?),(\d+),(\d+(\.\d+)?)\]");
-            if (match.Success)
+            // 解析递增模式: [a-b,c,d]
+            Match incrementMatch = Regex.Match(valueConfig, @"\[(\d+(\.\d+)?)-(\d+(\.\d+)?),(\d+),(\d+(\.\d+)?)\]");
+            if (incrementMatch.Success)
             {
-                decimal min = decimal.Parse(match.Groups[1].Value);
-                decimal max = decimal.Parse(match.Groups[3].Value);
-                int decimalPlaces = int.Parse(match.Groups[5].Value);
-                decimal startValue = decimal.Parse(match.Groups[6].Value);
+                decimal min = decimal.Parse(incrementMatch.Groups[1].Value);
+                decimal max = decimal.Parse(incrementMatch.Groups[3].Value);
+                int decimalPlaces = int.Parse(incrementMatch.Groups[5].Value);
+                decimal startValue = decimal.Parse(incrementMatch.Groups[6].Value);
 
                 if (!incrementValues.ContainsKey(deviceId))
                 {
@@ -143,20 +139,19 @@ namespace MQTTMessageSenderApp
             }
 
             // 解析随机数模式: [a-b,c]
-            Match standardMatch = Regex.Match(valueConfig, @"\[(\d+(\.\d+)?)-(\d+(\.\d+)?),(\d+)\]");
-            if (standardMatch.Success)
+            Match randomMatch = Regex.Match(valueConfig, @"\[(\d+(\.\d+)?)-(\d+(\.\d+)?),(\d+)\]");
+            if (randomMatch.Success)
             {
-                decimal min = decimal.Parse(standardMatch.Groups[1].Value);
-                decimal max = decimal.Parse(standardMatch.Groups[3].Value);
-                int decimalPlaces = int.Parse(standardMatch.Groups[5].Value);
+                decimal min = decimal.Parse(randomMatch.Groups[1].Value);
+                decimal max = decimal.Parse(randomMatch.Groups[3].Value);
+                int decimalPlaces = int.Parse(randomMatch.Groups[5].Value);
 
                 decimal generatedValue = Math.Round((decimal)(random.NextDouble()) * (max - min) + min, decimalPlaces, MidpointRounding.AwayFromZero);
                 return generatedValue;
             }
 
-            // 默认情况下，调用 `ProcessValueFormat()` 确保格式正确
-            return ProcessValueFormat(valueConfig);
+            // 默认情况下，返回原始值
+            return valueConfig;
         }
-
     }
 }
