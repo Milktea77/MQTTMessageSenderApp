@@ -9,7 +9,7 @@ namespace MQTTMessageSenderApp
         private static Button configButton;
         private static Button sendButton;
 
-        public static void SetupControl(MainForm form, EventHandler configClickHandler, Func<Button, string, string, string, string, string, Task> sendClickHandler)
+        public static void SetupControl(MainForm form, EventHandler configClickHandler, Func<Button, string, string, string, string, string, bool, Task> sendClickHandler)
         {
             form.Text = "MQTT Message Sender";
             form.ClientSize = new Size(400, 600);
@@ -63,6 +63,13 @@ namespace MQTTMessageSenderApp
             layout.Controls.Add(labelInterval, 0, 4);
             layout.Controls.Add(textBoxInterval, 1, 4);
 
+            var retainCheckBox = new CheckBox
+            {
+                Text = "Retain Message",
+                AutoSize = true,
+                Checked = false
+            };
+
             // 📌 创建 "发送" 按钮
             sendButton = new Button
             {
@@ -73,7 +80,8 @@ namespace MQTTMessageSenderApp
             };
 
             sendButton.Click += async (sender, e) =>
-                await sendClickHandler(sendButton, textBoxBroker.Text, textBoxPort.Text, textBoxKeepalive.Text, textBoxTopic.Text, textBoxInterval.Text);
+                await sendClickHandler(sendButton, textBoxBroker.Text, textBoxPort.Text, textBoxKeepalive.Text, textBoxTopic.Text, textBoxInterval.Text, retainCheckBox.Checked);
+
 
             // 📌 创建 "配置功能值" 按钮
             configButton = new Button
@@ -131,6 +139,7 @@ namespace MQTTMessageSenderApp
             // 📌 依次添加控件，确保顺序正确
             mainPanel.Controls.Add(sendButton);
             mainPanel.Controls.Add(layout);
+            mainPanel.Controls.Add(retainCheckBox);
             mainPanel.Controls.Add(configButton);
             mainPanel.Controls.Add(instructionButton); // 确保 "使用说明" 按钮 在 "配置功能值" 按钮下方
             mainPanel.Controls.Add(labelMinimizeHint);

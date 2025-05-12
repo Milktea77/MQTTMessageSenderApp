@@ -26,7 +26,7 @@ namespace MQTTMessageSenderApp
             trayManager = new TrayManager(this);
         }
 
-        public async Task ToggleSendAsync(Button button, string broker, string portStr, string keepaliveStr, string topic, string intervalStr)
+        public async Task ToggleSendAsync(Button button, string broker, string portStr, string keepaliveStr, string topic, string intervalStr, bool retain)
         {
             if (!isSending)
             {
@@ -53,7 +53,7 @@ namespace MQTTMessageSenderApp
                     cts = new CancellationTokenSource();
 
                     // 启动 MQTT 消息发送
-                    await mqttManager.StartSendingAsync(broker, portStr, keepaliveStr, topic, intervalStr, cts.Token);
+                    await mqttManager.StartSendingAsync(broker, portStr, keepaliveStr, topic, intervalStr, retain, cts.Token);
                 }
                 catch (OperationCanceledException)
                 {

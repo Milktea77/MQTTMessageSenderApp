@@ -27,7 +27,7 @@ namespace MQTTMessageSenderApp
             configuredValues = new Dictionary<string, string>(values);
         }
 
-        public async Task StartSendingAsync(string broker, string portStr, string keepaliveStr, string topic, string intervalStr, CancellationToken token)
+        public async Task StartSendingAsync(string broker, string portStr, string keepaliveStr, string topic, string intervalStr, bool retain, CancellationToken token)
         {
             if (!int.TryParse(portStr, out int port) ||
                 !int.TryParse(keepaliveStr, out int keepalive) ||
@@ -56,6 +56,7 @@ namespace MQTTMessageSenderApp
                     var mqttMessage = new MqttApplicationMessageBuilder()
                         .WithTopic(topic)
                         .WithPayload(modifiedJson)
+                        .WithRetainFlag(retain)
                         .Build();
 
                     await mqttClient.PublishAsync(mqttMessage, token);

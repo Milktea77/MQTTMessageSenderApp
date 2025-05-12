@@ -22,6 +22,8 @@ namespace MQTTMessageSenderApp
                        "保留 c 位小数的随机数；\n" +
                        "首次发送时 d 将作为第一个值发送\n\n" +
                        "以上功能仅在单次发送周期内生效。\n\n" +
+                       "勾选Retain Message以启用保留消息功能。\n" +
+                       "勾选后每次重新连接时，都会接收最后一条保留消息。\n\n" +
                        "Version: 0.4.6.7-rc\n\n" +
                        "Welcome Aboard!  -- ANA3401",
                 Dock = DockStyle.Fill,
