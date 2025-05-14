@@ -27,7 +27,7 @@ namespace MQTTMessageSenderApp
             configuredValues = new Dictionary<string, string>(values);
         }
 
-        public async Task StartSendingAsync(string broker, string portStr, string keepaliveStr, string topic, string intervalStr, bool retain, CancellationToken token)
+        public async Task StartSendingAsync(string broker, string portStr, string keepaliveStr, string topic, string intervalStr, bool retain, string username, string password, CancellationToken token)
         {
             if (!int.TryParse(portStr, out int port) ||
                 !int.TryParse(keepaliveStr, out int keepalive) ||
@@ -39,10 +39,16 @@ namespace MQTTMessageSenderApp
             var factory = new MqttClientFactory();
             mqttClient = factory.CreateMqttClient();
 
-            mqttOptions = new MqttClientOptionsBuilder()
+            var optionsBuilder = new MqttClientOptionsBuilder()
                 .WithTcpServer(broker, port)
-                .WithKeepAlivePeriod(TimeSpan.FromSeconds(keepalive))
-                .Build();
+                .WithKeepAlivePeriod(TimeSpan.FromSeconds(keepalive));
+
+            if (!string.IsNullOrWhiteSpace(username))
+            {
+                optionsBuilder = optionsBuilder.WithCredentials(username, password ?? "");
+            }
+
+            mqttOptions = optionsBuilder.Build();
 
             await mqttClient.ConnectAsync(mqttOptions, token);
 

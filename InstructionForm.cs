@@ -9,7 +9,7 @@ namespace MQTTMessageSenderApp
         public InstructionForm()
         {
             Text = "使用说明";
-            Size = new Size(450, 450);
+            Size = new Size(600, 600);
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Color.White;
 
@@ -24,7 +24,9 @@ namespace MQTTMessageSenderApp
                        "以上功能仅在单次发送周期内生效。\n\n" +
                        "勾选Retain Message以启用保留消息功能。\n" +
                        "勾选后每次重新连接时，都会接收最后一条保留消息。\n\n" +
-                       "Version: 0.4.7.0-rc\n\n" +
+                       "用户名和密码是非必填项。\n\n" +
+                       "今日推荐：Piano Concerto No. 1 in G Minor, Op. 25, MWV O7 - I. Molto allegro con fuoco\n\n" +
+                       "Version: 0.4.7.1-rc\n\n" +
                        "Welcome Aboard!  -- ANA3401",
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,

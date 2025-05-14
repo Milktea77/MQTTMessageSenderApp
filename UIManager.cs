@@ -9,7 +9,7 @@ namespace MQTTMessageSenderApp
         private static Button configButton;
         private static Button sendButton;
 
-        public static void SetupControl(MainForm form, EventHandler configClickHandler, Func<Button, string, string, string, string, string, bool, Task> sendClickHandler)
+        public static void SetupControl(MainForm form, EventHandler configClickHandler, Func<Button, string, string, string, string, string, bool, string, string, Task> sendClickHandler)
         {
             form.Text = "MQTT Message Sender";
             form.ClientSize = new Size(400, 600);
@@ -29,7 +29,7 @@ namespace MQTTMessageSenderApp
             TableLayoutPanel layout = new TableLayoutPanel
             {
                 ColumnCount = 2,
-                RowCount = 6,
+                RowCount = 8,
                 AutoSize = true,
                 Padding = new Padding(10),
                 BackColor = Color.White
@@ -50,6 +50,12 @@ namespace MQTTMessageSenderApp
             var textBoxKeepalive = new TextBox { Width = 200, Text = "60" };
             var textBoxTopic = new TextBox { Width = 200 };
             var textBoxInterval = new TextBox { Width = 200, Text = "60000" };
+            var labelUsername = new Label { Text = "Username:", AutoSize = true };
+            var labelPassword = new Label { Text = "Password:", AutoSize = true };
+
+            var textBoxUsername = new TextBox { Width = 200 };
+            var textBoxPassword = new TextBox { Width = 200, UseSystemPasswordChar = true };
+
 
             // 📌 添加输入框和标签到 layout
             layout.Controls.Add(labelBroker, 0, 0);
@@ -62,6 +68,11 @@ namespace MQTTMessageSenderApp
             layout.Controls.Add(textBoxTopic, 1, 3);
             layout.Controls.Add(labelInterval, 0, 4);
             layout.Controls.Add(textBoxInterval, 1, 4);
+            layout.Controls.Add(labelUsername, 0, 5);
+            layout.Controls.Add(textBoxUsername, 1, 5);
+            layout.Controls.Add(labelPassword, 0, 6);
+            layout.Controls.Add(textBoxPassword, 1, 6);
+
 
             var retainCheckBox = new CheckBox
             {
@@ -80,7 +91,17 @@ namespace MQTTMessageSenderApp
             };
 
             sendButton.Click += async (sender, e) =>
-                await sendClickHandler(sendButton, textBoxBroker.Text, textBoxPort.Text, textBoxKeepalive.Text, textBoxTopic.Text, textBoxInterval.Text, retainCheckBox.Checked);
+                await sendClickHandler(
+                    sendButton,
+                    textBoxBroker.Text,
+                    textBoxPort.Text,
+                    textBoxKeepalive.Text,
+                    textBoxTopic.Text,
+                    textBoxInterval.Text,
+                    retainCheckBox.Checked,
+                    textBoxUsername.Text,
+                    textBoxPassword.Text
+                );
 
 
             // 📌 创建 "配置功能值" 按钮
