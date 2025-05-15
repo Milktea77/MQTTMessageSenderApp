@@ -12,169 +12,137 @@ namespace MQTTMessageSenderApp
         public static void SetupControl(MainForm form, EventHandler configClickHandler, Func<Button, string, string, string, string, string, bool, string, string, Task> sendClickHandler)
         {
             form.Text = "MQTT Message Sender";
-            form.ClientSize = new Size(400, 600);
+            form.ClientSize = new Size(800, 800);
             form.BackColor = Color.White;
 
-            // 📌 使用 FlowLayoutPanel 作为主布局容器
-            FlowLayoutPanel mainPanel = new FlowLayoutPanel
+            var tabControl = new TabControl
             {
                 Dock = DockStyle.Fill,
-                FlowDirection = FlowDirection.TopDown, // 控件按顺序垂直排列
-                AutoSize = true,
-                WrapContents = false, // 禁止换行，确保垂直排列
-                Padding = new Padding(20)
+                Font = new Font("Segoe UI", 10F)
             };
 
-            // 📌 创建输入框布局
-            TableLayoutPanel layout = new TableLayoutPanel
+            TabPage tabSingle = new TabPage("单线程") { Padding = new Padding(10) };
+            tabSingle.Controls.Add(BuildSingleThreadPanel(configClickHandler, sendClickHandler));
+
+            TabPage tabMulti = new TabPage("多线程") { Padding = new Padding(10) };
+            tabMulti.Controls.Add(MultiThreadPanelBuilder.BuildCsvBased()); // 新增：基于CSV文件的界面构建
+
+            tabControl.TabPages.Add(tabSingle);
+            tabControl.TabPages.Add(tabMulti);
+
+            form.Controls.Add(tabControl);
+        }
+
+        private static FlowLayoutPanel BuildSingleThreadPanel(EventHandler configClickHandler, Func<Button, string, string, string, string, string, bool, string, string, Task> sendClickHandler)
+        {
+            var font = new Font("Segoe UI", 10.5F);
+
+            FlowLayoutPanel panel = new FlowLayoutPanel
             {
-                ColumnCount = 2,
-                RowCount = 8,
-                AutoSize = true,
-                Padding = new Padding(10),
-                BackColor = Color.White
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                AutoScroll = true,
+                Padding = new Padding(20),
+                WrapContents = false
             };
 
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            var txtBroker = new TextBox { Width = 360, Font = font };
+            var txtPort = new TextBox { Width = 360, Font = font, Text = "1883" };
+            var txtKeepAlive = new TextBox { Width = 360, Font = font, Text = "60" };
+            var txtTopic = new TextBox { Width = 360, Font = font };
+            var txtInterval = new TextBox { Width = 360, Font = font, Text = "60000" };
+            var txtUsername = new TextBox { Width = 360, Font = font };
+            var txtPassword = new TextBox { Width = 360, Font = font, UseSystemPasswordChar = true };
 
-            // 📌 添加标签和输入框
-            var labelBroker = new Label { Text = "Broker IP:", AutoSize = true };
-            var labelPort = new Label { Text = "Port:", AutoSize = true };
-            var labelKeepalive = new Label { Text = "Keepalive (sec):", AutoSize = true };
-            var labelTopic = new Label { Text = "Topic:", AutoSize = true };
-            var labelInterval = new Label { Text = "Interval (ms):", AutoSize = true };
+            var chkRetain = new CheckBox { Text = "Retain Message", AutoSize = true, Font = font };
 
-            var textBoxBroker = new TextBox { Width = 200 };
-            var textBoxPort = new TextBox { Width = 200, Text = "1883" };
-            var textBoxKeepalive = new TextBox { Width = 200, Text = "60" };
-            var textBoxTopic = new TextBox { Width = 200 };
-            var textBoxInterval = new TextBox { Width = 200, Text = "60000" };
-            var labelUsername = new Label { Text = "Username:", AutoSize = true };
-            var labelPassword = new Label { Text = "Password:", AutoSize = true };
-
-            var textBoxUsername = new TextBox { Width = 200 };
-            var textBoxPassword = new TextBox { Width = 200, UseSystemPasswordChar = true };
-
-
-            // 📌 添加输入框和标签到 layout
-            layout.Controls.Add(labelBroker, 0, 0);
-            layout.Controls.Add(textBoxBroker, 1, 0);
-            layout.Controls.Add(labelPort, 0, 1);
-            layout.Controls.Add(textBoxPort, 1, 1);
-            layout.Controls.Add(labelKeepalive, 0, 2);
-            layout.Controls.Add(textBoxKeepalive, 1, 2);
-            layout.Controls.Add(labelTopic, 0, 3);
-            layout.Controls.Add(textBoxTopic, 1, 3);
-            layout.Controls.Add(labelInterval, 0, 4);
-            layout.Controls.Add(textBoxInterval, 1, 4);
-            layout.Controls.Add(labelUsername, 0, 5);
-            layout.Controls.Add(textBoxUsername, 1, 5);
-            layout.Controls.Add(labelPassword, 0, 6);
-            layout.Controls.Add(textBoxPassword, 1, 6);
-
-
-            var retainCheckBox = new CheckBox
-            {
-                Text = "Retain Message",
-                AutoSize = true,
-                Checked = false
-            };
-
-            // 📌 创建 "发送" 按钮
-            sendButton = new Button
-            {
-                Name = "buttonSend",
-                Text = "Send",
-                Width = 360,
-                Height = 40
-            };
-
+            sendButton = new Button { Text = "发送", Width = 300, Height = 40, Font = font };
             sendButton.Click += async (sender, e) =>
+            {
                 await sendClickHandler(
                     sendButton,
-                    textBoxBroker.Text,
-                    textBoxPort.Text,
-                    textBoxKeepalive.Text,
-                    textBoxTopic.Text,
-                    textBoxInterval.Text,
-                    retainCheckBox.Checked,
-                    textBoxUsername.Text,
-                    textBoxPassword.Text
-                );
-
-
-            // 📌 创建 "配置功能值" 按钮
-            configButton = new Button
-            {
-                Text = "配置功能值",
-                Width = 360,
-                Height = 40
+                    txtBroker.Text,
+                    txtPort.Text,
+                    txtKeepAlive.Text,
+                    txtTopic.Text,
+                    txtInterval.Text,
+                    chkRetain.Checked,
+                    txtUsername.Text,
+                    txtPassword.Text);
             };
+
+            configButton = new Button { Text = "配置功能值", Width = 300, Height = 40, Font = font };
             configButton.Click += configClickHandler;
 
-            // 📌 创建 "使用说明" 按钮（放在 "配置功能值" 下面）
-            Button instructionButton = new Button
-            {
-                Text = "使用说明",
-                Width = 360,
-                Height = 40
-            };
-            instructionButton.Click += (sender, e) =>
-            {
-                InstructionForm instructionForm = new InstructionForm();
-                instructionForm.Show();
-            };
+            var instructionButton = new Button { Text = "使用说明", Width = 300, Height = 40, Font = font };
+            instructionButton.Click += (s, e) => new InstructionForm().Show();
 
-            // 📌 添加顶部的提示信息
+            void AddRow(string labelText, Control input)
+            {
+                var rowPanel = new FlowLayoutPanel
+                {
+                    AutoSize = true,
+                    FlowDirection = FlowDirection.LeftToRight,
+                    WrapContents = false,
+                    Padding = new Padding(2),
+                    Margin = new Padding(1)
+                };
+                rowPanel.Controls.Add(new Label { Text = labelText, Width = 120, Font = font, TextAlign = ContentAlignment.MiddleLeft, Height = 28 });
+                rowPanel.Controls.Add(input);
+                panel.Controls.Add(rowPanel);
+            }
+
+            AddRow("Broker IP:", txtBroker);
+            AddRow("Port:", txtPort);
+            AddRow("KeepAlive (sec):", txtKeepAlive);
+            AddRow("Topic:", txtTopic);
+            AddRow("Interval (ms):", txtInterval);
+            AddRow("Username:", txtUsername);
+            AddRow("Password:", txtPassword);
+            AddRow("Retain:", chkRetain);
+
+            var btnPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(2), AutoSize = true };
+            btnPanel.Controls.Add(sendButton);
+            panel.Controls.Add(btnPanel);
+
+            panel.Controls.Add(configButton);
+            panel.Controls.Add(instructionButton);
+
             var labelFileHint = new Label
             {
                 Text = "请确保软件同一目录下存在 sim_message.txt 文件",
                 AutoSize = true,
-                ForeColor = Color.DarkRed
+                ForeColor = Color.DarkRed,
+                Font = font
             };
-
             var labelConfigHint = new Label
             {
                 Text = "保存修改的配置会使原 sim_message.txt 内容变更",
                 AutoSize = true,
-                ForeColor = Color.DarkRed
+                ForeColor = Color.DarkRed,
+                Font = font
             };
-
             var labelMinimizeHint = new Label
             {
                 Text = "点击最小化可将软件置入托盘",
                 AutoSize = true,
-                ForeColor = Color.Gray
+                ForeColor = Color.Gray,
+                Font = font
             };
-
-            // 📌 添加路径标签
             Label pathLabel = CreatePathLabel();
-
-            // 📌 监听窗口大小变化，确保 Path 标签自适应
-            form.Resize += (sender, e) =>
+            panel.Resize += (sender, e) =>
             {
-                pathLabel.MaximumSize = new Size(form.ClientSize.Width - 20, 0);
+                pathLabel.MaximumSize = new Size(panel.ClientSize.Width - 20, 0);
             };
 
-            // 📌 依次添加控件，确保顺序正确
-            mainPanel.Controls.Add(sendButton);
-            mainPanel.Controls.Add(layout);
-            mainPanel.Controls.Add(retainCheckBox);
-            mainPanel.Controls.Add(configButton);
-            mainPanel.Controls.Add(instructionButton); // 确保 "使用说明" 按钮 在 "配置功能值" 按钮下方
-            mainPanel.Controls.Add(labelMinimizeHint);
-            mainPanel.Controls.Add(labelConfigHint);
-            mainPanel.Controls.Add(labelFileHint);
-            mainPanel.Controls.Add(pathLabel);
+            panel.Controls.Add(labelMinimizeHint);
+            panel.Controls.Add(labelConfigHint);
+            panel.Controls.Add(labelFileHint);
+            panel.Controls.Add(pathLabel);
 
-            // 📌 添加到窗体
-            form.Controls.Add(mainPanel);
+            return panel;
         }
 
-        /// <summary>
-        /// 设置 "配置功能项" 按钮的可用性
-        /// </summary>
         public static void SetConfigButtonEnabled(bool enabled)
         {
             if (configButton?.IsDisposed == false)
@@ -183,9 +151,6 @@ namespace MQTTMessageSenderApp
             }
         }
 
-        /// <summary>
-        /// 创建路径标签（带点击复制功能）
-        /// </summary>
         private static Label CreatePathLabel()
         {
             string currentPath = AppDomain.CurrentDomain.BaseDirectory;
@@ -196,7 +161,7 @@ namespace MQTTMessageSenderApp
                 ForeColor = Color.Blue,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(10),
-                MaximumSize = new Size(400, 0), // 限制最大宽度
+                MaximumSize = new Size(600, 0),
                 AutoEllipsis = true,
                 Text = $"Software Path: {currentPath}"
             };
