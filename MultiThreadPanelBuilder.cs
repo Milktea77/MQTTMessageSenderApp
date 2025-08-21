@@ -99,7 +99,7 @@ namespace MQTTMessageSenderApp
 
                     var topicUserMap = new Dictionary<string, string>();
                     var topicPassMap = new Dictionary<string, string>();
-                    var topicDeviceMap = new Dictionary<string, List<string>>();
+                    var topicDevicePointMap = new Dictionary<string, Dictionary<string, List<string>>>();
 
                     for (int i = 0; i < lines.Count; i++)
                     {
@@ -110,24 +110,31 @@ namespace MQTTMessageSenderApp
                         var user = cols.Length > 1 ? cols[1].Trim() : "";
                         var pass = cols.Length > 2 ? cols[2].Trim() : "";
                         var device = cols.Length > 3 ? cols[3].Trim() : "";
+                        var point = cols.Length > 4 ? cols[4].Trim() : "";
 
-                        if (!topicDeviceMap.ContainsKey(topic))
+                        if (!topicDevicePointMap.ContainsKey(topic))
                         {
-                            topicDeviceMap[topic] = new List<string>();
+                            topicDevicePointMap[topic] = new Dictionary<string, List<string>>();
                             topicUserMap[topic] = user;
                             topicPassMap[topic] = pass;
                         }
 
-                        if (!string.IsNullOrWhiteSpace(device))
-                            topicDeviceMap[topic].Add(device);
+                        if (!string.IsNullOrWhiteSpace(device) && !string.IsNullOrWhiteSpace(point))
+                        {
+                            if (!topicDevicePointMap[topic].ContainsKey(device))
+                            {
+                                topicDevicePointMap[topic][device] = new List<string>();
+                            }
+                            topicDevicePointMap[topic][device].Add(point);
+                        }
                     }
 
-                    foreach (var kvp in topicDeviceMap)
+                    foreach (var kvp in topicDevicePointMap)
                     {
                         topics.Add(kvp.Key);
                         usernames.Add(topicUserMap[kvp.Key]);
                         passwords.Add(topicPassMap[kvp.Key]);
-                        deviceIdList.Add(kvp.Value);
+                        deviceIdList.Add(kvp.Value.Keys.ToList());
 
                         var lbl = new Label
                         {
@@ -181,6 +188,7 @@ namespace MQTTMessageSenderApp
             AddRow("Interval(ms):", txtInterval);
             AddRow("Retain:", chkRetain);
             AddRow("CSV 文件:", txtCsvFile, btnCsvFile);
+            panel.Controls.Add(new Label { Text = "CSV格式：topic,user,pass,device,point", AutoSize = true, Font = font });
 
             var actionRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
             actionRow.Controls.Add(btnStart);
