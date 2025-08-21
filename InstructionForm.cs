@@ -26,7 +26,7 @@ namespace MQTTMessageSenderApp
                        "勾选后每次重新连接时，都会接收最后一条保留消息。\n\n" +
                        "用户名和密码是非必填项。\n\n" +
                        "多线程中对于csv的要求为：\n" +
-                       "A列为Topic，B列为用户名，C列为密码，逗号分隔。\n\n" +
+                       "A列为Topic，B列为用户名，C列为密码，D列为设备编号(device_id)，逗号分隔。\n\n" +
                        "今日推荐：Piano Concerto No. 1 in G Minor, Op. 25, MWV O7 - I. Molto allegro con fuoco\n\n" +
                        "Version: 0.5.0.0-rc\n\n" +
                        "Welcome Aboard!  -- ANA3401",

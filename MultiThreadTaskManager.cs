@@ -102,7 +102,7 @@ namespace MQTTMessageSenderApp
         }
 
         public static void StartAll(string broker, int port, int keepalive, int interval, bool retain,
-                                     List<string> topics, List<string> usernames, List<string> passwords)
+                                     List<string> topics, List<string> usernames, List<string> passwords, List<List<string>> deviceIdsList)
         {
             StopAll();
 
@@ -114,6 +114,7 @@ namespace MQTTMessageSenderApp
                 string topic = topics[i].Trim();
                 string username = usernames[i].Trim();
                 string password = passwords[i].Trim();
+                var deviceIds = deviceIdsList[i];
 
                 messageCountMap[topic] = 0;
 
@@ -143,7 +144,7 @@ namespace MQTTMessageSenderApp
 
                             while (!token.IsCancellationRequested && mqttClient.IsConnected)
                             {
-                                string message = await MessageFileHandler.ReadMessageAsync();
+                                string message = await MessageFileHandler.ReadMessageAsync(deviceIds);
 
                                 var mqttMessage = new MqttApplicationMessageBuilder()
                                     .WithTopic(topic)
