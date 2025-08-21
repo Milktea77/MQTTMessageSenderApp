@@ -35,7 +35,12 @@ namespace MQTTMessageSenderApp
             var jsonDict = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
             long currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            jsonDict["ts"] = currentTimestamp;
+            if (!jsonDict.ContainsKey("ts"))
+            {
+                jsonDict["ts"] = currentTimestamp;
+            }
+
+            long rootTs = GetTimestampValue(jsonDict["ts"], currentTimestamp);
 
             if (jsonDict.ContainsKey("devs") && jsonDict["devs"] is JsonElement devsElement)
             {
@@ -51,7 +56,17 @@ namespace MQTTMessageSenderApp
                         var devJson = JsonSerializer.Serialize(template);
                         var dev = JsonSerializer.Deserialize<Dictionary<string, object>>(devJson);
                         dev["dev"] = deviceId;
-                        dev["ts"] = currentTimestamp;
+
+                        long deviceTs;
+                        if (!dev.ContainsKey("ts"))
+                        {
+                            deviceTs = rootTs;
+                            dev["ts"] = deviceTs;
+                        }
+                        else
+                        {
+                            deviceTs = GetTimestampValue(dev["ts"], rootTs);
+                        }
 
                         if (dev.ContainsKey("d") && dev["d"] is JsonElement dElement)
                         {
@@ -59,12 +74,27 @@ namespace MQTTMessageSenderApp
 
                             foreach (var data in deviceData)
                             {
-                                data["ts"] = currentTimestamp;
-
-                                if (data.ContainsKey("v") && data["v"] is JsonElement vElement)
+                                if (!data.ContainsKey("ts"))
                                 {
-                                    string rawValue = vElement.GetRawText().Trim('"');
-                                    data["v"] = ProcessValueFormat(deviceId, data["m"].ToString(), rawValue);
+                                    data["ts"] = deviceTs;
+                                }
+                                else
+                                {
+                                    data["ts"] = GetTimestampValue(data["ts"], deviceTs);
+                                }
+
+                                if (data.ContainsKey("v"))
+                                {
+                                    if (data["v"] is JsonElement vElement)
+                                    {
+                                        string rawValue = vElement.GetRawText().Trim('"');
+                                        data["v"] = ProcessValueFormat(deviceId, data["m"].ToString(), rawValue);
+                                    }
+                                    else
+                                    {
+                                        string rawValue = data["v"].ToString();
+                                        data["v"] = ProcessValueFormat(deviceId, data["m"].ToString(), rawValue);
+                                    }
                                 }
                             }
 
@@ -81,7 +111,17 @@ namespace MQTTMessageSenderApp
                     foreach (var dev in devices)
                     {
                         string deviceId = dev.ContainsKey("dev") ? dev["dev"].ToString() : string.Empty;
-                        dev["ts"] = currentTimestamp;
+
+                        long deviceTs;
+                        if (!dev.ContainsKey("ts"))
+                        {
+                            deviceTs = rootTs;
+                            dev["ts"] = deviceTs;
+                        }
+                        else
+                        {
+                            deviceTs = GetTimestampValue(dev["ts"], rootTs);
+                        }
 
                         if (dev.ContainsKey("d") && dev["d"] is JsonElement dElement)
                         {
@@ -89,12 +129,27 @@ namespace MQTTMessageSenderApp
 
                             foreach (var data in deviceData)
                             {
-                                data["ts"] = currentTimestamp;
-
-                                if (data.ContainsKey("v") && data["v"] is JsonElement vElement)
+                                if (!data.ContainsKey("ts"))
                                 {
-                                    string rawValue = vElement.GetRawText().Trim('"');
-                                    data["v"] = ProcessValueFormat(deviceId, data["m"].ToString(), rawValue);
+                                    data["ts"] = deviceTs;
+                                }
+                                else
+                                {
+                                    data["ts"] = GetTimestampValue(data["ts"], deviceTs);
+                                }
+
+                                if (data.ContainsKey("v"))
+                                {
+                                    if (data["v"] is JsonElement vElement)
+                                    {
+                                        string rawValue = vElement.GetRawText().Trim('"');
+                                        data["v"] = ProcessValueFormat(deviceId, data["m"].ToString(), rawValue);
+                                    }
+                                    else
+                                    {
+                                        string rawValue = data["v"].ToString();
+                                        data["v"] = ProcessValueFormat(deviceId, data["m"].ToString(), rawValue);
+                                    }
                                 }
                             }
 
@@ -107,6 +162,144 @@ namespace MQTTMessageSenderApp
             }
 
             return JsonSerializer.Serialize(jsonDict, new JsonSerializerOptions { WriteIndented = true });
+        }
+
+        public static async Task<string> ReadMessageAsync(Dictionary<string, List<string>> devicePoints)
+        {
+            if (devicePoints == null || devicePoints.Count == 0)
+            {
+                return await ReadMessageAsync();
+            }
+
+            string messageFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sim_message.txt");
+            if (!File.Exists(messageFile))
+            {
+                throw new FileNotFoundException($"消息文件 '{messageFile}' 不存在！");
+            }
+
+            string content = await File.ReadAllTextAsync(messageFile);
+            var jsonDict = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
+            long currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            if (!jsonDict.ContainsKey("ts"))
+            {
+                jsonDict["ts"] = currentTimestamp;
+            }
+
+            long rootTs = GetTimestampValue(jsonDict["ts"], currentTimestamp);
+
+            if (jsonDict.ContainsKey("devs") && jsonDict["devs"] is JsonElement devsElement)
+            {
+                var templateDevices = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(devsElement.GetRawText());
+                var templateDevice = templateDevices.Count > 0 ? templateDevices[0] : new Dictionary<string, object>();
+                List<Dictionary<string, object>> templateDataList = null;
+                if (templateDevice.ContainsKey("d") && templateDevice["d"] is JsonElement dElement)
+                {
+                    templateDataList = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(dElement.GetRawText());
+                }
+
+                var templateData = templateDataList != null && templateDataList.Count > 0 ? templateDataList[0] : new Dictionary<string, object>();
+
+                List<Dictionary<string, object>> devices = new List<Dictionary<string, object>>();
+
+                foreach (var kvp in devicePoints)
+                {
+                    string deviceId = kvp.Key;
+                    var points = kvp.Value ?? new List<string>();
+
+                    var devJson = JsonSerializer.Serialize(templateDevice);
+                    var dev = JsonSerializer.Deserialize<Dictionary<string, object>>(devJson);
+                    dev["dev"] = deviceId;
+
+                    long deviceTs;
+                    if (!dev.ContainsKey("ts"))
+                    {
+                        deviceTs = rootTs;
+                        dev["ts"] = deviceTs;
+                    }
+                    else
+                    {
+                        deviceTs = GetTimestampValue(dev["ts"], rootTs);
+                    }
+
+                    var dataList = new List<Dictionary<string, object>>();
+                    foreach (var point in points)
+                    {
+                        var dataJson = JsonSerializer.Serialize(templateData);
+                        var data = JsonSerializer.Deserialize<Dictionary<string, object>>(dataJson);
+                        data["m"] = point;
+
+                        if (!data.ContainsKey("ts"))
+                        {
+                            data["ts"] = deviceTs;
+                        }
+                        else
+                        {
+                            data["ts"] = GetTimestampValue(data["ts"], deviceTs);
+                        }
+
+                        if (data.ContainsKey("v"))
+                        {
+                            if (data["v"] is JsonElement vElement)
+                            {
+                                string rawValue = vElement.GetRawText().Trim('"');
+                                data["v"] = ProcessValueFormat(deviceId, point, rawValue);
+                            }
+                            else
+                            {
+                                string rawValue = data["v"].ToString();
+                                data["v"] = ProcessValueFormat(deviceId, point, rawValue);
+                            }
+                        }
+
+                        dataList.Add(data);
+                    }
+
+                    dev["d"] = dataList;
+                    devices.Add(dev);
+                }
+
+                jsonDict["devs"] = devices;
+            }
+
+            return JsonSerializer.Serialize(jsonDict, new JsonSerializerOptions { WriteIndented = true });
+        }
+
+        private static long GetTimestampValue(object value, long defaultValue)
+        {
+            if (value == null)
+            {
+                return defaultValue;
+            }
+
+            if (value is JsonElement element)
+            {
+                if (element.ValueKind == JsonValueKind.Number && element.TryGetInt64(out long num))
+                {
+                    return num;
+                }
+                if (element.ValueKind == JsonValueKind.String && long.TryParse(element.GetString(), out long strVal))
+                {
+                    return strVal;
+                }
+            }
+            else
+            {
+                if (value is long l)
+                {
+                    return l;
+                }
+                if (value is int i)
+                {
+                    return i;
+                }
+                if (long.TryParse(value.ToString(), out long parsed))
+                {
+                    return parsed;
+                }
+            }
+
+            return defaultValue;
         }
 
         /// <summary>
