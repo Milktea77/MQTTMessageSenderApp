@@ -18,12 +18,12 @@ namespace MQTTMessageSenderApp
             return !File.Exists(messageFile) || string.IsNullOrWhiteSpace(File.ReadAllText(messageFile));
         }
 
-        public static async Task<string> ReadMessageAsync()
+        public static async Task<string> ReadMessageAsync(bool forceUpdateTs = false)
         {
-            return await ReadMessageAsync(null);
+            return await ReadMessageAsync(null, forceUpdateTs);
         }
 
-        public static async Task<string> ReadMessageAsync(List<string> deviceIds)
+        public static async Task<string> ReadMessageAsync(List<string> deviceIds, bool forceUpdateTs = false)
         {
             string messageFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sim_message.txt");
             if (!File.Exists(messageFile))
@@ -35,7 +35,10 @@ namespace MQTTMessageSenderApp
             var jsonDict = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
             long currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            jsonDict["ts"] = currentTimestamp;
+            if (forceUpdateTs || !jsonDict.TryGetValue("ts", out var rootTs) || IsNullOrEmpty(rootTs))
+            {
+                jsonDict["ts"] = currentTimestamp;
+            }
 
             if (jsonDict.ContainsKey("devs") && jsonDict["devs"] is JsonElement devsElement)
             {
@@ -51,7 +54,10 @@ namespace MQTTMessageSenderApp
                         var devJson = JsonSerializer.Serialize(template);
                         var dev = JsonSerializer.Deserialize<Dictionary<string, object>>(devJson);
                         dev["dev"] = deviceId;
-                        dev["ts"] = currentTimestamp;
+                        if (forceUpdateTs || !dev.TryGetValue("ts", out var devTs) || IsNullOrEmpty(devTs))
+                        {
+                            dev["ts"] = currentTimestamp;
+                        }
 
                         if (dev.ContainsKey("d") && dev["d"] is JsonElement dElement)
                         {
@@ -59,7 +65,10 @@ namespace MQTTMessageSenderApp
 
                             foreach (var data in deviceData)
                             {
-                                data["ts"] = currentTimestamp;
+                                if (forceUpdateTs || !data.TryGetValue("ts", out var dataTs) || IsNullOrEmpty(dataTs))
+                                {
+                                    data["ts"] = currentTimestamp;
+                                }
 
                                 if (data.ContainsKey("v") && data["v"] is JsonElement vElement)
                                 {
@@ -81,7 +90,10 @@ namespace MQTTMessageSenderApp
                     foreach (var dev in devices)
                     {
                         string deviceId = dev.ContainsKey("dev") ? dev["dev"].ToString() : string.Empty;
-                        dev["ts"] = currentTimestamp;
+                        if (forceUpdateTs || !dev.TryGetValue("ts", out var devTs) || IsNullOrEmpty(devTs))
+                        {
+                            dev["ts"] = currentTimestamp;
+                        }
 
                         if (dev.ContainsKey("d") && dev["d"] is JsonElement dElement)
                         {
@@ -89,7 +101,10 @@ namespace MQTTMessageSenderApp
 
                             foreach (var data in deviceData)
                             {
-                                data["ts"] = currentTimestamp;
+                                if (forceUpdateTs || !data.TryGetValue("ts", out var dataTs) || IsNullOrEmpty(dataTs))
+                                {
+                                    data["ts"] = currentTimestamp;
+                                }
 
                                 if (data.ContainsKey("v") && data["v"] is JsonElement vElement)
                                 {
@@ -107,6 +122,24 @@ namespace MQTTMessageSenderApp
             }
 
             return JsonSerializer.Serialize(jsonDict, new JsonSerializerOptions { WriteIndented = true });
+        }
+
+        private static bool IsNullOrEmpty(object value)
+        {
+            if (value == null) return true;
+
+            if (value is JsonElement element)
+            {
+                return element.ValueKind switch
+                {
+                    JsonValueKind.Null => true,
+                    JsonValueKind.Undefined => true,
+                    JsonValueKind.String => string.IsNullOrWhiteSpace(element.GetString()),
+                    _ => false
+                };
+            }
+
+            return string.IsNullOrWhiteSpace(value.ToString());
         }
 
         /// <summary>
