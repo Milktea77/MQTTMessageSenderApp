@@ -93,7 +93,7 @@ namespace MQTTMessageSenderApp
                     var topics = new List<string>();
                     var usernames = new List<string>();
                     var passwords = new List<string>();
-                    var deviceIdList = new List<List<string>>();
+                    var devicePointMapList = new List<Dictionary<string, List<string>>>();
 
                     statusPanel.Controls.Clear();
 
@@ -110,7 +110,7 @@ namespace MQTTMessageSenderApp
                         var user = cols.Length > 1 ? cols[1].Trim() : "";
                         var pass = cols.Length > 2 ? cols[2].Trim() : "";
                         var device = cols.Length > 3 ? cols[3].Trim() : "";
-                        var point = cols.Length > 4 ? cols[4].Trim() : "";
+                        var points = cols.Length > 4 ? cols[4].Trim() : "";
 
                         if (!topicDevicePointMap.ContainsKey(topic))
                         {
@@ -119,13 +119,15 @@ namespace MQTTMessageSenderApp
                             topicPassMap[topic] = pass;
                         }
 
-                        if (!string.IsNullOrWhiteSpace(device) && !string.IsNullOrWhiteSpace(point))
+                        if (!string.IsNullOrWhiteSpace(device))
                         {
-                            if (!topicDevicePointMap[topic].ContainsKey(device))
+                            var pointList = new List<string>();
+                            if (!string.IsNullOrWhiteSpace(points))
                             {
-                                topicDevicePointMap[topic][device] = new List<string>();
+                                pointList = points.Split(new[] { '|', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                                                   .Select(p => p.Trim()).ToList();
                             }
-                            topicDevicePointMap[topic][device].Add(point);
+                            topicDevicePointMap[topic][device] = pointList;
                         }
                     }
 
@@ -134,7 +136,7 @@ namespace MQTTMessageSenderApp
                         topics.Add(kvp.Key);
                         usernames.Add(topicUserMap[kvp.Key]);
                         passwords.Add(topicPassMap[kvp.Key]);
-                        deviceIdList.Add(kvp.Value.Keys.ToList());
+                        devicePointMapList.Add(kvp.Value);
 
                         var lbl = new Label
                         {
@@ -162,7 +164,7 @@ namespace MQTTMessageSenderApp
                         topics,
                         usernames,
                         passwords,
-                        deviceIdList
+                        devicePointMapList
                     );
                 }
                 catch (Exception ex)
