@@ -93,8 +93,13 @@ namespace MQTTMessageSenderApp
                     var topics = new List<string>();
                     var usernames = new List<string>();
                     var passwords = new List<string>();
+                    var deviceIdList = new List<List<string>>();
 
                     statusPanel.Controls.Clear();
+
+                    var topicUserMap = new Dictionary<string, string>();
+                    var topicPassMap = new Dictionary<string, string>();
+                    var topicDeviceMap = new Dictionary<string, List<string>>();
 
                     for (int i = 0; i < lines.Count; i++)
                     {
@@ -104,19 +109,34 @@ namespace MQTTMessageSenderApp
                         var topic = cols[0].Trim();
                         var user = cols.Length > 1 ? cols[1].Trim() : "";
                         var pass = cols.Length > 2 ? cols[2].Trim() : "";
+                        var device = cols.Length > 3 ? cols[3].Trim() : "";
 
-                        topics.Add(topic);
-                        usernames.Add(user);
-                        passwords.Add(pass);
+                        if (!topicDeviceMap.ContainsKey(topic))
+                        {
+                            topicDeviceMap[topic] = new List<string>();
+                            topicUserMap[topic] = user;
+                            topicPassMap[topic] = pass;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(device))
+                            topicDeviceMap[topic].Add(device);
+                    }
+
+                    foreach (var kvp in topicDeviceMap)
+                    {
+                        topics.Add(kvp.Key);
+                        usernames.Add(topicUserMap[kvp.Key]);
+                        passwords.Add(topicPassMap[kvp.Key]);
+                        deviceIdList.Add(kvp.Value);
 
                         var lbl = new Label
                         {
-                            Text = $"[{topic}] 状态：等待启动...",
+                            Text = $"[{kvp.Key}] 状态：等待启动...",
                             AutoSize = true,
                             Width = 700,
                             Font = font
                         };
-                        MultiThreadTaskManager.RegisterThreadStatus(topic, lbl);
+                        MultiThreadTaskManager.RegisterThreadStatus(kvp.Key, lbl);
                         statusPanel.Controls.Add(lbl);
                     }
 
@@ -134,7 +154,8 @@ namespace MQTTMessageSenderApp
                         chkRetain.Checked,
                         topics,
                         usernames,
-                        passwords
+                        passwords,
+                        deviceIdList
                     );
                 }
                 catch (Exception ex)

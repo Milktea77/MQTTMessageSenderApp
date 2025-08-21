@@ -20,6 +20,11 @@ namespace MQTTMessageSenderApp
 
         public static async Task<string> ReadMessageAsync()
         {
+            return await ReadMessageAsync(null);
+        }
+
+        public static async Task<string> ReadMessageAsync(List<string> deviceIds)
+        {
             string messageFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sim_message.txt");
             if (!File.Exists(messageFile))
             {
@@ -34,29 +39,67 @@ namespace MQTTMessageSenderApp
 
             if (jsonDict.ContainsKey("devs") && jsonDict["devs"] is JsonElement devsElement)
             {
-                var devices = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(devsElement.GetRawText());
+                var templateDevices = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(devsElement.GetRawText());
 
-                foreach (var dev in devices)
+                List<Dictionary<string, object>> devices;
+                if (deviceIds != null && deviceIds.Count > 0)
                 {
-                    string deviceId = dev["dev"].ToString();
-                    dev["ts"] = currentTimestamp;
-
-                    if (dev.ContainsKey("d") && dev["d"] is JsonElement dElement)
+                    var template = templateDevices.Count > 0 ? templateDevices[0] : new Dictionary<string, object>();
+                    devices = new List<Dictionary<string, object>>();
+                    foreach (var deviceId in deviceIds)
                     {
-                        var deviceData = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(dElement.GetRawText());
+                        var devJson = JsonSerializer.Serialize(template);
+                        var dev = JsonSerializer.Deserialize<Dictionary<string, object>>(devJson);
+                        dev["dev"] = deviceId;
+                        dev["ts"] = currentTimestamp;
 
-                        foreach (var data in deviceData)
+                        if (dev.ContainsKey("d") && dev["d"] is JsonElement dElement)
                         {
-                            data["ts"] = currentTimestamp;
+                            var deviceData = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(dElement.GetRawText());
 
-                            if (data.ContainsKey("v") && data["v"] is JsonElement vElement)
+                            foreach (var data in deviceData)
                             {
-                                string rawValue = vElement.GetRawText().Trim('"');
-                                data["v"] = ProcessValueFormat(deviceId, data["m"].ToString(), rawValue);
+                                data["ts"] = currentTimestamp;
+
+                                if (data.ContainsKey("v") && data["v"] is JsonElement vElement)
+                                {
+                                    string rawValue = vElement.GetRawText().Trim('"');
+                                    data["v"] = ProcessValueFormat(deviceId, data["m"].ToString(), rawValue);
+                                }
                             }
+
+                            dev["d"] = deviceData;
                         }
 
-                        dev["d"] = deviceData;
+                        devices.Add(dev);
+                    }
+                }
+                else
+                {
+                    devices = templateDevices;
+
+                    foreach (var dev in devices)
+                    {
+                        string deviceId = dev.ContainsKey("dev") ? dev["dev"].ToString() : string.Empty;
+                        dev["ts"] = currentTimestamp;
+
+                        if (dev.ContainsKey("d") && dev["d"] is JsonElement dElement)
+                        {
+                            var deviceData = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(dElement.GetRawText());
+
+                            foreach (var data in deviceData)
+                            {
+                                data["ts"] = currentTimestamp;
+
+                                if (data.ContainsKey("v") && data["v"] is JsonElement vElement)
+                                {
+                                    string rawValue = vElement.GetRawText().Trim('"');
+                                    data["v"] = ProcessValueFormat(deviceId, data["m"].ToString(), rawValue);
+                                }
+                            }
+
+                            dev["d"] = deviceData;
+                        }
                     }
                 }
 
