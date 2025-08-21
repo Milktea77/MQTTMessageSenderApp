@@ -18,12 +18,12 @@ namespace MQTTMessageSenderApp
             return !File.Exists(messageFile) || string.IsNullOrWhiteSpace(File.ReadAllText(messageFile));
         }
 
-        public static async Task<string> ReadMessageAsync()
+        public static async Task<string> ReadMessageAsync(bool forceUpdateTs = false)
         {
-            return await ReadMessageAsync((Dictionary<string, List<string>>)null);
+            return await ReadMessageAsync(null, forceUpdateTs);
         }
 
-        public static async Task<string> ReadMessageAsync(List<string> deviceIds)
+        public static async Task<string> ReadMessageAsync(List<string> deviceIds, bool forceUpdateTs = false)
         {
             Dictionary<string, List<string>> map = null;
             if (deviceIds != null)
@@ -50,7 +50,7 @@ namespace MQTTMessageSenderApp
             var jsonDict = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
             long currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            if (!jsonDict.ContainsKey("ts"))
+            if (forceUpdateTs || !jsonDict.TryGetValue("ts", out var rootTs) || IsNullOrEmpty(rootTs))
             {
                 jsonDict["ts"] = currentTimestamp;
             }
@@ -74,6 +74,10 @@ namespace MQTTMessageSenderApp
                         var devJson = JsonSerializer.Serialize(template);
                         var dev = JsonSerializer.Deserialize<Dictionary<string, object>>(devJson);
                         dev["dev"] = deviceId;
+                        if (forceUpdateTs || !dev.TryGetValue("ts", out var devTs) || IsNullOrEmpty(devTs))
+                        {
+                            dev["ts"] = currentTimestamp;
+                        }
 
                         long deviceTs;
                         if (!dev.ContainsKey("ts"))
@@ -98,13 +102,9 @@ namespace MQTTMessageSenderApp
 
                             foreach (var data in deviceData)
                             {
-                                if (!data.ContainsKey("ts"))
+                                if (forceUpdateTs || !data.TryGetValue("ts", out var dataTs) || IsNullOrEmpty(dataTs))
                                 {
-                                    data["ts"] = deviceTs;
-                                }
-                                else
-                                {
-                                    data["ts"] = GetTimestampValue(data["ts"], deviceTs);
+                                    data["ts"] = currentTimestamp;
                                 }
 
                                 if (data.ContainsKey("v"))
@@ -135,16 +135,9 @@ namespace MQTTMessageSenderApp
                     foreach (var dev in devices)
                     {
                         string deviceId = dev.ContainsKey("dev") ? dev["dev"].ToString() : string.Empty;
-
-                        long deviceTs;
-                        if (!dev.ContainsKey("ts"))
+                        if (forceUpdateTs || !dev.TryGetValue("ts", out var devTs) || IsNullOrEmpty(devTs))
                         {
-                            deviceTs = rootTs;
-                            dev["ts"] = deviceTs;
-                        }
-                        else
-                        {
-                            deviceTs = GetTimestampValue(dev["ts"], rootTs);
+                            dev["ts"] = currentTimestamp;
                         }
 
                         if (dev.ContainsKey("d") && dev["d"] is JsonElement dElement)
@@ -153,13 +146,9 @@ namespace MQTTMessageSenderApp
 
                             foreach (var data in deviceData)
                             {
-                                if (!data.ContainsKey("ts"))
+                                if (forceUpdateTs || !data.TryGetValue("ts", out var dataTs) || IsNullOrEmpty(dataTs))
                                 {
-                                    data["ts"] = deviceTs;
-                                }
-                                else
-                                {
-                                    data["ts"] = GetTimestampValue(data["ts"], deviceTs);
+                                    data["ts"] = currentTimestamp;
                                 }
 
                                 if (data.ContainsKey("v"))
@@ -188,142 +177,22 @@ namespace MQTTMessageSenderApp
             return JsonSerializer.Serialize(jsonDict, new JsonSerializerOptions { WriteIndented = true });
         }
 
-        public static async Task<string> ReadMessageAsync(Dictionary<string, List<string>> devicePoints)
+        private static bool IsNullOrEmpty(object value)
         {
-            if (devicePoints == null || devicePoints.Count == 0)
-            {
-                return await ReadMessageAsync();
-            }
-
-            string messageFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sim_message.txt");
-            if (!File.Exists(messageFile))
-            {
-                throw new FileNotFoundException($"消息文件 '{messageFile}' 不存在！");
-            }
-
-            string content = await File.ReadAllTextAsync(messageFile);
-            var jsonDict = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
-            long currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
-            if (!jsonDict.ContainsKey("ts"))
-            {
-                jsonDict["ts"] = currentTimestamp;
-            }
-
-            long rootTs = GetTimestampValue(jsonDict["ts"], currentTimestamp);
-
-            if (jsonDict.ContainsKey("devs") && jsonDict["devs"] is JsonElement devsElement)
-            {
-                var templateDevices = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(devsElement.GetRawText());
-                var templateDevice = templateDevices.Count > 0 ? templateDevices[0] : new Dictionary<string, object>();
-                List<Dictionary<string, object>> templateDataList = null;
-                if (templateDevice.ContainsKey("d") && templateDevice["d"] is JsonElement dElement)
-                {
-                    templateDataList = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(dElement.GetRawText());
-                }
-
-                var templateData = templateDataList != null && templateDataList.Count > 0 ? templateDataList[0] : new Dictionary<string, object>();
-
-                List<Dictionary<string, object>> devices = new List<Dictionary<string, object>>();
-
-                foreach (var kvp in devicePoints)
-                {
-                    string deviceId = kvp.Key;
-                    var points = kvp.Value ?? new List<string>();
-
-                    var devJson = JsonSerializer.Serialize(templateDevice);
-                    var dev = JsonSerializer.Deserialize<Dictionary<string, object>>(devJson);
-                    dev["dev"] = deviceId;
-
-                    long deviceTs;
-                    if (!dev.ContainsKey("ts"))
-                    {
-                        deviceTs = rootTs;
-                        dev["ts"] = deviceTs;
-                    }
-                    else
-                    {
-                        deviceTs = GetTimestampValue(dev["ts"], rootTs);
-                    }
-
-                    var dataList = new List<Dictionary<string, object>>();
-                    foreach (var point in points)
-                    {
-                        var dataJson = JsonSerializer.Serialize(templateData);
-                        var data = JsonSerializer.Deserialize<Dictionary<string, object>>(dataJson);
-                        data["m"] = point;
-
-                        if (!data.ContainsKey("ts"))
-                        {
-                            data["ts"] = deviceTs;
-                        }
-                        else
-                        {
-                            data["ts"] = GetTimestampValue(data["ts"], deviceTs);
-                        }
-
-                        if (data.ContainsKey("v"))
-                        {
-                            if (data["v"] is JsonElement vElement)
-                            {
-                                string rawValue = vElement.GetRawText().Trim('"');
-                                data["v"] = ProcessValueFormat(deviceId, point, rawValue);
-                            }
-                            else
-                            {
-                                string rawValue = data["v"].ToString();
-                                data["v"] = ProcessValueFormat(deviceId, point, rawValue);
-                            }
-                        }
-
-                        dataList.Add(data);
-                    }
-
-                    dev["d"] = dataList;
-                    devices.Add(dev);
-                }
-
-                jsonDict["devs"] = devices;
-            }
-
-            return JsonSerializer.Serialize(jsonDict, new JsonSerializerOptions { WriteIndented = true });
-        }
-
-        private static long GetTimestampValue(object value, long defaultValue)
-        {
-            if (value == null)
-            {
-                return defaultValue;
-            }
+            if (value == null) return true;
 
             if (value is JsonElement element)
             {
-                if (element.ValueKind == JsonValueKind.Number && element.TryGetInt64(out long num))
+                return element.ValueKind switch
                 {
-                    return num;
-                }
-                if (element.ValueKind == JsonValueKind.String && long.TryParse(element.GetString(), out long strVal))
-                {
-                    return strVal;
-                }
-            }
-            else
-            {
-                if (value is long l)
-                {
-                    return l;
-                }
-                if (value is int i)
-                {
-                    return i;
-                }
-                if (long.TryParse(value.ToString(), out long parsed))
-                {
-                    return parsed;
-                }
+                    JsonValueKind.Null => true,
+                    JsonValueKind.Undefined => true,
+                    JsonValueKind.String => string.IsNullOrWhiteSpace(element.GetString()),
+                    _ => false
+                };
             }
 
-            return defaultValue;
+            return string.IsNullOrWhiteSpace(value.ToString());
         }
 
         /// <summary>
