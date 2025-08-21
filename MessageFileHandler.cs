@@ -35,10 +35,10 @@ namespace MQTTMessageSenderApp
                 }
             }
 
-            return await ReadMessageAsync(map);
+            return await ReadMessageAsync(map, forceUpdateTs);
         }
 
-        public static async Task<string> ReadMessageAsync(Dictionary<string, List<string>> devicePointMap)
+        public static async Task<string> ReadMessageAsync(Dictionary<string, List<string>> devicePointMap, bool forceUpdateTs = false)
         {
             string messageFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sim_message.txt");
             if (!File.Exists(messageFile))
@@ -50,7 +50,7 @@ namespace MQTTMessageSenderApp
             var jsonDict = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
             long currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            if (forceUpdateTs || !jsonDict.TryGetValue("ts", out var rootTs) || IsNullOrEmpty(rootTs))
+            if (forceUpdateTs || !jsonDict.TryGetValue("ts", out var rootTsObj) || IsNullOrEmpty(rootTsObj))
             {
                 jsonDict["ts"] = currentTimestamp;
             }
@@ -193,6 +193,35 @@ namespace MQTTMessageSenderApp
             }
 
             return string.IsNullOrWhiteSpace(value.ToString());
+        }
+
+        private static long GetTimestampValue(object value, long defaultValue)
+        {
+            if (value == null)
+            {
+                return defaultValue;
+            }
+
+            if (value is JsonElement element)
+            {
+                if (element.ValueKind == JsonValueKind.Number && element.TryGetInt64(out var num))
+                {
+                    return num;
+                }
+                if (element.ValueKind == JsonValueKind.String && long.TryParse(element.GetString(), out var numFromString))
+                {
+                    return numFromString;
+                }
+
+                return defaultValue;
+            }
+
+            if (value is long longVal)
+            {
+                return longVal;
+            }
+
+            return long.TryParse(value.ToString(), out var result) ? result : defaultValue;
         }
 
         /// <summary>
