@@ -20,10 +20,25 @@ namespace MQTTMessageSenderApp
 
         public static async Task<string> ReadMessageAsync()
         {
-            return await ReadMessageAsync(null);
+            return await ReadMessageAsync((Dictionary<string, List<string>>)null);
         }
 
         public static async Task<string> ReadMessageAsync(List<string> deviceIds)
+        {
+            Dictionary<string, List<string>> map = null;
+            if (deviceIds != null)
+            {
+                map = new Dictionary<string, List<string>>();
+                foreach (var id in deviceIds)
+                {
+                    map[id] = new List<string>();
+                }
+            }
+
+            return await ReadMessageAsync(map);
+        }
+
+        public static async Task<string> ReadMessageAsync(Dictionary<string, List<string>> devicePointMap)
         {
             string messageFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sim_message.txt");
             if (!File.Exists(messageFile))
@@ -42,12 +57,15 @@ namespace MQTTMessageSenderApp
                 var templateDevices = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(devsElement.GetRawText());
 
                 List<Dictionary<string, object>> devices;
-                if (deviceIds != null && deviceIds.Count > 0)
+                if (devicePointMap != null && devicePointMap.Count > 0)
                 {
                     var template = templateDevices.Count > 0 ? templateDevices[0] : new Dictionary<string, object>();
                     devices = new List<Dictionary<string, object>>();
-                    foreach (var deviceId in deviceIds)
+                    foreach (var kvp in devicePointMap)
                     {
+                        string deviceId = kvp.Key;
+                        var points = kvp.Value;
+
                         var devJson = JsonSerializer.Serialize(template);
                         var dev = JsonSerializer.Deserialize<Dictionary<string, object>>(devJson);
                         dev["dev"] = deviceId;
@@ -56,6 +74,12 @@ namespace MQTTMessageSenderApp
                         if (dev.ContainsKey("d") && dev["d"] is JsonElement dElement)
                         {
                             var deviceData = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(dElement.GetRawText());
+
+                            if (points != null && points.Count > 0)
+                            {
+                                deviceData = deviceData
+                                    .FindAll(data => points.Contains(data["m"].ToString()));
+                            }
 
                             foreach (var data in deviceData)
                             {
