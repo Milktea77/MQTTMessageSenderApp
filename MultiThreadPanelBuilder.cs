@@ -27,6 +27,8 @@ namespace MQTTMessageSenderApp
             var txtKeepAlive = new TextBox { Width = 360, Font = font, Text = "60" };
             var txtInterval = new TextBox { Width = 360, Font = font, Text = "10000" };
             var chkRetain = new CheckBox { Text = "Retain Message", Font = font, AutoSize = true };
+            var txtMaxConcurrency = new TextBox { Width = 360, Font = font, Text = "500" };
+            var txtLogFlush = new TextBox { Width = 360, Font = font, Text = "500" };
 
             var txtCsvFile = new TextBox { Width = 360, Font = font, ReadOnly = true };
             var btnCsvFile = new Button { Text = "选择 CSV 文件", Width = 160, Height = 36, Font = font };
@@ -73,6 +75,8 @@ namespace MQTTMessageSenderApp
                 if (!int.TryParse(txtPort.Text, out int port) ||
                     !int.TryParse(txtKeepAlive.Text, out int keepalive) ||
                     !int.TryParse(txtInterval.Text, out int interval) ||
+                    !int.TryParse(txtMaxConcurrency.Text, out int maxConc) ||
+                    !int.TryParse(txtLogFlush.Text, out int logFlush) ||
                     string.IsNullOrWhiteSpace(txtBroker.Text) ||
                     string.IsNullOrWhiteSpace(txtCsvFile.Text) ||
                     !File.Exists(txtCsvFile.Text))
@@ -155,7 +159,9 @@ namespace MQTTMessageSenderApp
                         topics,
                         usernames,
                         passwords,
-                        deviceIdList
+                        deviceIdList,
+                        maxConc,
+                        logFlush
                     );
                 }
                 catch (Exception ex)
@@ -180,6 +186,8 @@ namespace MQTTMessageSenderApp
             AddRow("KeepAlive:", txtKeepAlive);
             AddRow("Interval(ms):", txtInterval);
             AddRow("Retain:", chkRetain);
+            AddRow("Max Concurrency:", txtMaxConcurrency);
+            AddRow("Log Flush(ms):", txtLogFlush);
             AddRow("CSV 文件:", txtCsvFile, btnCsvFile);
 
             var actionRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
