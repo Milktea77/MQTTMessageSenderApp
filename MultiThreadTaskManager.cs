@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using MQTTnet;
+using MQTTnet.Client;
 
 namespace MQTTMessageSenderApp
 {
@@ -16,6 +17,7 @@ namespace MQTTMessageSenderApp
         private static Dictionary<string, int> messageCountMap = new();
         private static Dictionary<string, Label> threadStatusMap = new();
         private const int MaxLogLines = 500;
+        public static int MaxConcurrency { get; set; } = 1;
 
         public static void BindLogBox(TextBox outputBox)
         {
@@ -108,6 +110,7 @@ namespace MQTTMessageSenderApp
 
             cts = new CancellationTokenSource();
             var token = cts.Token;
+            var semaphore = new SemaphoreSlim(MaxConcurrency);
 
             for (int i = 0; i < topics.Count; i++)
             {
@@ -120,57 +123,48 @@ namespace MQTTMessageSenderApp
 
                 Task t = Task.Run(async () =>
                 {
-                    int retryCount = 0;
+                    var pool = MqttClientPool.GetPool(broker, port, keepalive, username, password);
+
                     while (!token.IsCancellationRequested)
                     {
+                        IMqttClient? mqttClient = null;
                         try
                         {
-                            var factory = new MqttClientFactory();
-                            using var mqttClient = factory.CreateMqttClient();
+                            await semaphore.WaitAsync(token);
+                            mqttClient = await pool.GetClientAsync(token);
 
-                            var builder = new MqttClientOptionsBuilder()
-                                .WithTcpServer(broker, port)
-                                .WithKeepAlivePeriod(TimeSpan.FromSeconds(keepalive));
+                            string message = await MessageFileHandler.ReadMessageAsync(deviceIds);
 
-                            if (!string.IsNullOrWhiteSpace(username))
-                                builder = builder.WithCredentials(username, password);
+                            var mqttMessage = new MqttApplicationMessageBuilder()
+                                .WithTopic(topic)
+                                .WithPayload(message)
+                                .WithRetainFlag(retain)
+                                .Build();
 
-                            var options = builder.Build();
-                            await mqttClient.ConnectAsync(options, token);
+                            await mqttClient.PublishAsync(mqttMessage, token);
 
-                            Log($"[{topic}] 已连接");
-                            UpdateThreadStatus(topic, "已连接");
-                            retryCount = 0;
-
-                            while (!token.IsCancellationRequested && mqttClient.IsConnected)
-                            {
-                                string message = await MessageFileHandler.ReadMessageAsync(deviceIds);
-
-                                var mqttMessage = new MqttApplicationMessageBuilder()
-                                    .WithTopic(topic)
-                                    .WithPayload(message)
-                                    .WithRetainFlag(retain)
-                                    .Build();
-
-                                await mqttClient.PublishAsync(mqttMessage, token);
-
-                                messageCountMap[topic]++;
-                                Log($"[{topic}] 已发送消息，总计: {messageCountMap[topic]}");
-                                await Task.Delay(interval, token);
-                            }
-
-                            await mqttClient.DisconnectAsync();
-                            UpdateThreadStatus(topic, "已断开");
-                            Log($"[{topic}] 已断开连接");
+                            messageCountMap[topic]++;
+                            Log($"[{topic}] 已发送消息，总计: {messageCountMap[topic]}");
+                            UpdateThreadStatus(topic, "运行中");
                         }
                         catch (Exception ex)
                         {
-                            retryCount++;
-                            Log($"[{topic}] 异常({retryCount}): {ex.Message}");
-                            UpdateThreadStatus(topic, $"重试中({retryCount})");
+                            Log($"[{topic}] 异常: {ex.Message}");
+                            UpdateThreadStatus(topic, $"异常: {ex.Message}");
                             await Task.Delay(3000, token);
                         }
+                        finally
+                        {
+                            if (mqttClient != null)
+                                pool.ReturnClient(mqttClient);
+                            semaphore.Release();
+                        }
+
+                        await Task.Delay(interval, token);
                     }
+
+                    UpdateThreadStatus(topic, "已停止");
+                    Log($"[{topic}] 线程已结束");
                 }, token);
 
                 tasks.Add(t);
@@ -189,6 +183,7 @@ namespace MQTTMessageSenderApp
             tasks.Clear();
             messageCountMap.Clear();
             threadStatusMap.Clear();
+            MqttClientPool.ClearAll();
         }
     }
 }
