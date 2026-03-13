@@ -26,29 +26,57 @@ namespace MQTTMessageSenderApp
             SetupUI();
         }
 
+        private Panel scrollPanel; // 定义一个面板容器
+
         private void SetupUI()
         {
-            Button parseButton = new Button { Text = "解析 JSON", Dock = DockStyle.Top };
+            Button parseButton = new Button { Text = "解析 JSON", Dock = DockStyle.Top, Height = 40 };
             parseButton.Click += ParseJson;
 
-            Button saveButton = new Button { Text = "保存", Dock = DockStyle.Bottom };
+            Button saveButton = new Button { Text = "保存", Dock = DockStyle.Bottom, Height = 40 };
             saveButton.Click += SaveConfig;
 
+            // 1. 初始化滚动容器
+            scrollPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true, // 开启自动滚动条
+                Padding = new Padding(0, 0, 20, 0) // 留出一点右侧空间给滚动条，防止遮挡
+            };
+
+            // 2. 初始化布局面板
             tableLayout = new TableLayoutPanel
             {
                 ColumnCount = 4,
-                Dock = DockStyle.Fill,
-                AutoSize = true
+                Dock = DockStyle.Top, // 注意：这里用 Top 或 None，配合 AutoSize
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                CellBorderStyle = TableLayoutPanelCellBorderStyle.Single // 可选：增加边框方便观察
             };
 
-            tableLayout.Controls.Add(new Label { Text = "选择", AutoSize = true }, 0, 0);
-            tableLayout.Controls.Add(new Label { Text = "功能名称", AutoSize = true }, 1, 0);
-            tableLayout.Controls.Add(new Label { Text = "值 (可编辑)", AutoSize = true }, 2, 0);
-            tableLayout.Controls.Add(new Label { Text = "递增", AutoSize = true }, 3, 0);
+            // 设置列宽占比（可选，让界面更整齐）
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50F));  // 选择
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40F));   // 功能名称
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40F));   // 值
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 60F));  // 递增
 
+            // 层级关系：Form -> Controls -> (parseButton, saveButton, scrollPanel -> tableLayout)
+            this.Controls.Add(scrollPanel);
+            scrollPanel.Controls.Add(tableLayout); // 将布局面板放入滚动面板
             this.Controls.Add(saveButton);
-            this.Controls.Add(tableLayout);
             this.Controls.Add(parseButton);
+
+            // 初始化表头
+            AddHeader();
+        }
+
+        // 提取一个添加表头的方法，因为 ParseJson 也要用到
+        private void AddHeader()
+        {
+            tableLayout.Controls.Add(new Label { Text = "选择", Font = new System.Drawing.Font(this.Font, System.Drawing.FontStyle.Bold) }, 0, 0);
+            tableLayout.Controls.Add(new Label { Text = "功能名称", Font = new System.Drawing.Font(this.Font, System.Drawing.FontStyle.Bold) }, 1, 0);
+            tableLayout.Controls.Add(new Label { Text = "值 (可编辑)", Font = new System.Drawing.Font(this.Font, System.Drawing.FontStyle.Bold) }, 2, 0);
+            tableLayout.Controls.Add(new Label { Text = "递增", Font = new System.Drawing.Font(this.Font, System.Drawing.FontStyle.Bold) }, 3, 0);
         }
 
         private void ParseJson(object sender, EventArgs e)
