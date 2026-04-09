@@ -27,7 +27,7 @@ namespace MQTTMessageSenderApp
             configuredValues = new Dictionary<string, string>(values);
         }
 
-        public async Task StartSendingAsync(string broker, string portStr, string keepaliveStr, string topic, string intervalStr, bool retain, string username, string password, CancellationToken token)
+        public async Task StartSendingAsync(string broker, string portStr, string keepaliveStr, string topic, string intervalStr, bool retain, string username, string password, bool useMqtts, bool sslSecure, CancellationToken token)
         {
             if (!int.TryParse(portStr, out int port) ||
                 !int.TryParse(keepaliveStr, out int keepalive) ||
@@ -40,8 +40,35 @@ namespace MQTTMessageSenderApp
             mqttClient = factory.CreateMqttClient();
 
             var optionsBuilder = new MqttClientOptionsBuilder()
-                .WithTcpServer(broker, port)
                 .WithKeepAlivePeriod(TimeSpan.FromSeconds(keepalive));
+
+            // 设置MQTTS或MQTT
+            if (useMqtts)
+            {
+                optionsBuilder = optionsBuilder.WithTlsOptions(o =>
+                {
+                    if (sslSecure)
+                    {
+                        // 启用SSL安全验证（完全验证证书）
+                        o = o.WithCertificateValidationHandler(ctx =>
+                        {
+                            // 使用默认的证书验证
+                            return ctx.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None;
+                        });
+                    }
+                    else
+                    {
+                        // 禁用SSL安全验证（允许所有证书，类似MQTTX的"去掉SSL安全"选项）
+                        o = o.WithCertificateValidationHandler(ctx =>
+                        {
+                            // 跳过所有证书验证
+                            return true;
+                        });
+                    }
+                });
+            }
+
+            optionsBuilder = optionsBuilder.WithTcpServer(broker, port);
 
             if (!string.IsNullOrWhiteSpace(username))
             {
