@@ -272,7 +272,7 @@ namespace MQTTMessageSenderApp
 
             try
             {
-                string json = File.ReadAllText("sim_message.txt");
+                string json = File.ReadAllText(MessageFileHandler.MessageFilePath);
                 var jsonObj = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
 
                 if (jsonObj.ContainsKey("devs"))
@@ -331,7 +331,7 @@ namespace MQTTMessageSenderApp
 
             try
             {
-                string messageFile = "sim_message.txt";
+                string messageFile = MessageFileHandler.MessageFilePath;
                 if (!File.Exists(messageFile))
                 {
                     MessageBox.Show($"消息文件 '{messageFile}' 不存在！", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);

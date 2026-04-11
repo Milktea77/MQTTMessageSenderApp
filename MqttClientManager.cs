@@ -13,7 +13,9 @@ namespace MQTTMessageSenderApp
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
         private IMqttClient mqttClient;
         private MqttClientOptions mqttOptions;
-        private Dictionary<string, string> configuredValues = new Dictionary<string, string>(); // 存储配置的 `m-v`
+        private Dictionary<string, string> configuredValues = new Dictionary<string, string>();
+
+        public Action<string> OnLog { get; set; }
 
         public MqttClientManager()
         {
@@ -21,7 +23,12 @@ namespace MQTTMessageSenderApp
             mqttClient = factory.CreateMqttClient();
         }
 
-        // 新增方法：设置 `m-v` 值
+        private void Log(string message)
+        {
+            Logger.Info(message);
+            OnLog?.Invoke(message);
+        }
+
         public void SetConfiguredValues(Dictionary<string, string> values)
         {
             configuredValues = new Dictionary<string, string>(values);
@@ -79,11 +86,13 @@ namespace MQTTMessageSenderApp
 
             await mqttClient.ConnectAsync(mqttOptions, token);
 
+            Log($"已连接到 {broker}:{port}，Topic: {topic}");
+
+            int sentCount = 0;
             while (!token.IsCancellationRequested)
             {
                 try
                 {
-                    // 每次发送前重新读取并更新消息内容，确保 ts 更新
                     string modifiedJson = await MessageFileHandler.ReadMessageAsync();
 
                     var mqttMessage = new MqttApplicationMessageBuilder()
@@ -93,15 +102,19 @@ namespace MQTTMessageSenderApp
                         .Build();
 
                     await mqttClient.PublishAsync(mqttMessage, token);
-                    // Trace.WriteLine($"发送消息成功: {modifiedJson}");
+                    sentCount++;
+                    Log($"消息已发送，累计: {sentCount} 条");
                 }
                 catch (Exception ex)
                 {
                     Logger.Error($"发送消息失败: {ex.Message}");
+                    Log($"发送失败: {ex.Message}");
                 }
 
                 await Task.Delay(interval, token);
             }
+
+            Log("发送已停止，正在断开连接...");
         }
 
 

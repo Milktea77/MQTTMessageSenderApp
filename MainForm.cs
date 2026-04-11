@@ -23,6 +23,7 @@ namespace MQTTMessageSenderApp
             this.Text = title;
 
             mqttManager = new MqttClientManager();
+            mqttManager.OnLog = UIManager.AppendLog;
             trayManager = new TrayManager(this);
         }
 
@@ -57,8 +58,7 @@ namespace MQTTMessageSenderApp
                 }
                 catch (OperationCanceledException)
                 {
-                    // 用户取消发送操作时的提示
-                    MessageBox.Show("消息发送已取消", "通知", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    UIManager.AppendLog("消息发送已取消。");
                 }
                 catch (Exception ex)
                 {
@@ -73,13 +73,13 @@ namespace MQTTMessageSenderApp
             }
             else
             {
-                // 取消发送
                 cts?.Cancel();
                 cts = null;
                 isSending = false;
                 button.Text = "Send";
-                UIManager.SetConfigButtonEnabled(true); // 停止发送后重新启用配置按钮
-                trayManager.SetRunningStatus(false); // 更新运行状态为"未运行"
+                UIManager.AppendLog("用户请求停止发送。");
+                UIManager.SetConfigButtonEnabled(true);
+                trayManager.SetRunningStatus(false);
             }
         }
 
