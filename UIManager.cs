@@ -83,7 +83,7 @@ namespace MQTTMessageSenderApp
             });
             bar.Controls.Add(new Label
             {
-                Text = "ANA3401  ©  2026",
+                Text = "Ethan Liang  ©  2026",
                 Dock = DockStyle.Right, AutoSize = false, Width = 130,
                 Font = new Font("Segoe UI", 7.5F), ForeColor = StatusText,
                 TextAlign = ContentAlignment.MiddleRight
