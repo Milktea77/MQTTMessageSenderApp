@@ -12,10 +12,11 @@ namespace MQTTMessageSenderApp
     {
         private static Dictionary<string, Dictionary<string, decimal>> incrementValues = new Dictionary<string, Dictionary<string, decimal>>();
 
+        public static string MessageFilePath { get; set; } = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sim_message.txt");
+
         public static bool IsMessageFileEmpty()
         {
-            string messageFile = "sim_message.txt";
-            return !File.Exists(messageFile) || string.IsNullOrWhiteSpace(File.ReadAllText(messageFile));
+            return !File.Exists(MessageFilePath) || string.IsNullOrWhiteSpace(File.ReadAllText(MessageFilePath));
         }
 
         public static async Task<string> ReadMessageAsync()
@@ -25,7 +26,7 @@ namespace MQTTMessageSenderApp
 
         public static async Task<string> ReadMessageAsync(List<string> deviceIds)
         {
-            string messageFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sim_message.txt");
+            string messageFile = MessageFilePath;
             if (!File.Exists(messageFile))
             {
                 throw new FileNotFoundException($"消息文件 '{messageFile}' 不存在！");
